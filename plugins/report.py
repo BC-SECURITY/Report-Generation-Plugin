@@ -59,8 +59,24 @@ class Plugin(Plugin):
     def do_report(self, args):
         'Generate customized PDF Reports'
         # First line used for description
-        Plugin.attack_searcher(self)
+        
+        # Use this to call MITRE Attack plugin
+        #Plugin.attack_searcher(self)
+
+        choice = input("\n [>] Directory to logo: ")
+        if choice.lower() != '':
+            logoDir = choice
+        else:
+            logoDir = "./Reports/Templates/empire.png"
+
+        print(helpers.color("[*] Generating Session Report"))
+        self.sessionReport(logoDir)
+        print(helpers.color("[*] Generating Credentials Report"))
+        self.credentialReport(logoDir)
+        print(helpers.color("[*] Generating Masterlog"))
+        self.masterLog(logoDir)
         print(helpers.color("[+] All Reports generated"))
+
 
     def sessionReport(self, logoDir):
         conn = self.database_connect()
