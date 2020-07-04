@@ -5,7 +5,7 @@ from lib.common.plugins import Plugin
 from jinja2 import Environment, FileSystemLoader
 from tabulate import tabulate
 from xhtml2pdf import pisa
-
+from .attack import Plugin
 import lib.common.helpers as helpers
 import threading
 import sqlite3
@@ -59,19 +59,7 @@ class Plugin(Plugin):
     def do_report(self, args):
         'Generate customized PDF Reports'
         # First line used for description
-
-        choice = input("\n [>] Directory to logo: ")
-        if choice.lower() != '':
-            logoDir = choice
-        else:
-            logoDir = "./Reports/Templates/empire.png"
-
-        print(helpers.color("[*] Generating Session Report"))
-        self.sessionReport(logoDir)
-        print(helpers.color("[*] Generating Credentials Report"))
-        self.credentialReport(logoDir)
-        print(helpers.color("[*] Generating Masterlog"))
-        self.masterLog(logoDir)
+        Plugin.attack_searcher(self)
         print(helpers.color("[+] All Reports generated"))
 
     def sessionReport(self, logoDir):
