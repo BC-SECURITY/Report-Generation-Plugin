@@ -6,6 +6,7 @@ from jinja2 import Environment, FileSystemLoader
 from tabulate import tabulate
 from xhtml2pdf import pisa
 from .attack import Plugin
+from md2pdf.core import md2pdf
 import lib.common.helpers as helpers
 import threading
 import sqlite3
@@ -59,8 +60,55 @@ class Plugin(Plugin):
     def do_report(self, args):
         'Generate customized PDF Reports'
         # First line used for description
-        Plugin.attack_searcher(self)
+
+        # Use this to call MITRE Attack plugin
+        software, techniques = Plugin.attack_searcher(self)
+
+        choice = input("\n [>] Directory to logo: ")
+        if choice.lower() != '':
+            logoDir = choice
+        else:
+            logoDir = "./Reports/Templates/empire.png"
+
+        self.EmpireReport(logoDir, software, techniques)
+        print(helpers.color("[*] Generating Session Report"))
+        self.sessionReport(logoDir)
+        print(helpers.color("[*] Generating Credentials Report"))
+        self.credentialReport(logoDir)
+        print(helpers.color("[*] Generating Masterlog"))
+        self.masterLog(logoDir)
         print(helpers.color("[+] All Reports generated"))
+
+    def EmpireReport(self, logoDir, software, techniques):
+        self.lock.acquire()
+
+        # Set info from database
+        description = software['description']
+
+        # Switch rows and columns of platforms
+        platforms = software['x_mitre_platforms']
+        platforms = [[platforms[j] for j in range(len(platforms))]]
+
+        # Create list of techniques
+        used_techniques = list([])
+        for i in range(len(techniques)):
+            used_techniques.append('<h3>' + techniques[i]['name'] + '</h3>')
+            used_techniques.append(techniques[i]['description'])
+
+        # Load Template
+        env = Environment(loader=FileSystemLoader('.'))
+        template = env.get_template("./Reports/Templates/empire_report_template.md")
+
+        # Add data to Jinja2 Template
+        template_vars = {"logo": logoDir,
+                         "description": description,
+                         "platforms": tabulate(platforms, tablefmt='html'),
+                         "techniques": used_techniques}
+
+        # Generate PDF from html file
+        md_out = template.render(template_vars)
+        md2pdf("./Reports/Empire_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css', base_url='.')
+        self.lock.release()
 
     def sessionReport(self, logoDir):
         conn = self.database_connect()
