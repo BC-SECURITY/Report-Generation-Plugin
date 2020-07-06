@@ -1,4 +1,3 @@
-""" An example of a plugin. """
 from __future__ import print_function
 
 from lib.common.plugins import Plugin
