@@ -246,6 +246,66 @@ class Plugin(Plugin):
                base_url='.')
         self.lock.release()
 
+    def ModuleReport(self, logoDir, software, techniques):
+        conn = self.database_connect()
+        conn = self.get_db_connection()
+
+        self.lock.acquire()
+
+        # Pull agent data from database
+        cur = conn.cursor()
+        cur.execute("""
+             SELECT
+                 taskings.id,
+                 taskings.agent,
+                 module_name,
+                 software,
+                 tt.technique
+             FROM
+                 taskings
+             LEFT OUTER JOIN taskings_techniques tt ON tt.tasking_id = taskings.id
+             WHERE taskings.module_name IS NOT NULL
+                                """)
+
+        data = cur.fetchall()
+
+        # Format text as a string and print to new line
+        module_data = []
+        # for i in range(len(data)):
+        #    if data[i][2] == data[i-1][2]:
+        #        module_data.append(data[i][3])
+        #        module_data.append(data[i][4])
+        #    else:
+        #        module_data.append(data[i][2])
+
+        # Set info from database
+        description = software['description']
+
+        # Switch rows and columns of platforms
+        platforms = software['x_mitre_platforms']
+        platforms = [[platforms[j] for j in range(len(platforms))]]
+
+        # Create list of techniques
+        used_techniques = list([])
+        for i in range(len(techniques)):
+            used_techniques.append('<h3>' + techniques[i]['name'] + '</h3>')
+            used_techniques.append(techniques[i]['description'])
+
+        # Load Template
+        env = Environment(loader=FileSystemLoader('.'))
+        template = env.get_template("./Reports/Templates/module_report_template.md")
+
+        log = ''
+        # Add data to Jinja2 Template
+        template_vars = {"logo": logoDir,
+                         "log": log}
+
+        # Generate PDF from html file
+        md_out = template.render(template_vars)
+        md2pdf("./Reports/Module_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
+               base_url='.')
+        self.lock.release()
+
     def convertHtmlToPdf(self, sourceHtml, outputFilename):
         resultFile = open(outputFilename, "w+b")
         pisaStatus = pisa.CreatePDF(sourceHtml, resultFile)
