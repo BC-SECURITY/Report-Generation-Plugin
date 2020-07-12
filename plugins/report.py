@@ -67,6 +67,7 @@ class Plugin(Plugin):
             logoDir = "./Reports/Templates/empire.png"
 
         print(helpers.color("[*] Generating Empire Report"))
+
         # Use this to call MITRE Attack plugin
         software, techniques = Plugin.attack_searcher(self)
         self.EmpireReport(logoDir, software, techniques)
@@ -127,7 +128,7 @@ class Plugin(Plugin):
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
-        template = env.get_template("./Reports/Templates/session_template.html")
+        template = env.get_template("./Reports/Templates/sessions_template.md")
 
         # Add headers for table
         sessions = [('SessionID', 'Hostname', 'User Name', 'First Check-in')]
@@ -138,8 +139,9 @@ class Plugin(Plugin):
                          "sessions": tabulate(sessions, tablefmt='html')}
 
         # Generate PDF from html file
-        html_out = template.render(template_vars)
-        self.convertHtmlToPdf(html_out, "./Reports/Session_Report.pdf")
+        md_out = template.render(template_vars)
+        md2pdf("./Reports/Sessions_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
+               base_url='.')
         self.lock.release()
 
     def credentialReport(self, logoDir):
@@ -168,7 +170,7 @@ class Plugin(Plugin):
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
-        template = env.get_template("./Reports/Templates/credentials_template.html")
+        template = env.get_template("./Reports/Templates/credentials_template.md")
 
         # Add headers for table
         creds = [('Domain', 'Username', 'Host', 'Cred Type', 'Password')]
@@ -179,8 +181,9 @@ class Plugin(Plugin):
                          "creds": tabulate(creds, tablefmt='html')}
 
         # Generate PDF from html file
-        html_out = template.render(template_vars)
-        self.convertHtmlToPdf(html_out, "./Reports/Credentials_Report.pdf")
+        md_out = template.render(template_vars)
+        md2pdf("./Reports/Credentials_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
+               base_url='.')
         self.lock.release()
 
     def masterLog(self, logoDir):
@@ -234,7 +237,7 @@ class Plugin(Plugin):
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
-        template = env.get_template("./Reports/Templates/module_report_template.md")
+        template = env.get_template("./Reports/Templates/masterlog_template.md")
 
         # Add data to Jinja2 Template
         template_vars = {"logo": logoDir,
@@ -242,7 +245,7 @@ class Plugin(Plugin):
 
         # Generate PDF from html file
         md_out = template.render(template_vars)
-        md2pdf("./Reports/Module_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
+        md2pdf("./Reports/Masterlog_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
                base_url='.')
         self.lock.release()
 
