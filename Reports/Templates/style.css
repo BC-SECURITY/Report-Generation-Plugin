@@ -6,3 +6,8 @@ th, td {
   padding: 5px;
   text-align: left;
 }
+
+img[alt=logo] {
+   width:100px;
+   height:100px;
+}
