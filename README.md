@@ -8,6 +8,7 @@ The current implemenation uses the style.css and templates to generate the repor
 ## Install
 Prerequisites:
 * Empire 3.2.3+
+* [ATT&CK Plugin v0.1](https://github.com/BC-SECURITY/Attack-Plugin/releases)
 
 1. Add report.py to the plugins folder of Empire.
 
