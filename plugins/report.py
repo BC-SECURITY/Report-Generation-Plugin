@@ -8,6 +8,7 @@ from xhtml2pdf import pisa
 from .attack import Plugin
 from md2pdf.core import md2pdf
 import lib.common.helpers as helpers
+import lib.common.modules as modules
 import threading
 import sqlite3
 import sys
@@ -81,6 +82,10 @@ class Plugin(Plugin):
         print(helpers.color("[*] Generating Masterlog"))
         self.masterLog(logoDir)
 
+        techniques = Plugin.all_attacks(self)
+        print(helpers.color("[*] Generating Module Report"))
+        self.ModuleReport(logoDir, software, techniques)
+
         print(helpers.color("[+] All Reports generated"))
 
     def EmpireReport(self, logoDir, software, techniques):
@@ -100,7 +105,6 @@ class Plugin(Plugin):
             used_techniques.append(techniques[i]['description'])
 
         # Load Template
-
         env = Environment(loader=FileSystemLoader('.'))
         template = env.get_template("./Reports/Templates/empire_report_template.md")
 
@@ -258,41 +262,29 @@ class Plugin(Plugin):
         # Pull agent data from database
         cur = conn.cursor()
         cur.execute("""
-             SELECT
-                 taskings.id,
-                 taskings.agent,
-                 module_name,
-                 software,
-                 tt.technique
-             FROM
-                 taskings
-             LEFT OUTER JOIN taskings_techniques tt ON tt.tasking_id = taskings.id
-             WHERE taskings.module_name IS NOT NULL
+            SELECT DISTINCT
+            module_name
+            FROM
+            taskings
+            WHERE taskings.module_name IS NOT NULL
                                 """)
 
         data = cur.fetchall()
 
-        # Format text as a string and print to new line
-        module_data = []
-        # for i in range(len(data)):
-        #    if data[i][2] == data[i-1][2]:
-        #        module_data.append(data[i][3])
-        #        module_data.append(data[i][4])
-        #    else:
-        #        module_data.append(data[i][2])
-
-        # Set info from database
-        description = software['description']
-
-        # Switch rows and columns of platforms
-        platforms = software['x_mitre_platforms']
-        platforms = [[platforms[j] for j in range(len(platforms))]]
+        TTP = list([])
+        for module_name in data:
+            TTP.append(self.mainMenu.modules.modules[module_name[0]].info['Techniques'])
 
         # Create list of techniques
         used_techniques = list([])
-        for i in range(len(techniques)):
-            used_techniques.append('<h3>' + techniques[i]['name'] + '</h3>')
-            used_techniques.append(techniques[i]['description'])
+        for ttp_name in TTP:
+            for i in range(len(techniques)):
+                if ttp_name[0] in techniques[i]._inner['external_references'][0]._inner['external_id']:
+                    try:
+                        used_techniques.append('<h3>' + techniques[i]['name'] + '</h3>')
+                        used_techniques.append(techniques[i]._inner['description'])
+                    except:
+                        pass
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
@@ -301,7 +293,7 @@ class Plugin(Plugin):
         log = ''
         # Add data to Jinja2 Template
         template_vars = {"logo": logoDir,
-                         "log": log}
+                        "techniques": used_techniques}
 
         # Generate PDF from html file
         md_out = template.render(template_vars)
