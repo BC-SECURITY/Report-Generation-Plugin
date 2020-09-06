@@ -324,12 +324,6 @@ class Plugin(Plugin):
                base_url='.')
         self.lock.release()
 
-    def convertHtmlToPdf(self, sourceHtml, outputFilename):
-        resultFile = open(outputFilename, "w+b")
-        pisaStatus = pisa.CreatePDF(sourceHtml, resultFile)
-        resultFile.close()
-        return pisaStatus.err
-
     def get_db_connection(self):
         """
         Returns the
