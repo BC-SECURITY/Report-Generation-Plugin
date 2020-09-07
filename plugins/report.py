@@ -290,19 +290,23 @@ class Plugin(Plugin):
         data = cur.fetchall()
 
         TTP = list([])
-        for module_name in data:
-            TTP.append(self.mainMenu.modules.modules[module_name[0]].info['Techniques'])
+        module_name = list([])
+        for module_directory in data:
+            TTP.append(self.mainMenu.modules.modules[module_directory[0]].info['Techniques'])
+            module_name.append(self.mainMenu.modules.modules[module_directory[0]].info['Name'])
 
         # Create list of techniques
         used_techniques = list([])
-        for ttp_name in TTP:
-            for i in range(len(techniques)):
-                if ttp_name[0] in techniques[i]._inner['external_references'][0]._inner['external_id']:
-                    try:
-                        used_techniques.append('<h3>' + techniques[i]['name'] + '</h3>')
-                        used_techniques.append(techniques[i]._inner['description'])
-                    except:
-                        pass
+        for ttp_list in TTP:
+            for ttp_name in ttp_list:
+                for i in range(len(techniques)):
+                    if ttp_name in techniques[i]._inner['external_references'][0]._inner['external_id']:
+                        try:
+                            used_techniques.append('<h3>' + techniques[i]['name'] + '</h3>')
+                            used_techniques.append('**Empire Modules Used:** ' + module_name[TTP.index(ttp_list)] + '<br><br>')
+                            used_techniques.append(techniques[i]._inner['description'])
+                        except:
+                            pass
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
@@ -323,6 +327,12 @@ class Plugin(Plugin):
         md2pdf("./Reports/Module_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
                base_url='.')
         self.lock.release()
+
+    def convertHtmlToPdf(self, sourceHtml, outputFilename):
+        resultFile = open(outputFilename, "w+b")
+        pisaStatus = pisa.CreatePDF(sourceHtml, resultFile)
+        resultFile.close()
+        return pisaStatus.err
 
     def get_db_connection(self):
         """
