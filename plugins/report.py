@@ -8,6 +8,7 @@ from xhtml2pdf import pisa
 from .attack import Plugin
 from md2pdf.core import md2pdf
 import lib.common.helpers as helpers
+import lib.common.modules as modules
 import threading
 import sqlite3
 import sys
@@ -68,7 +69,7 @@ class Plugin(Plugin):
 
         print(helpers.color("[*] Generating Empire Report"))
 
-        # Use this to call MITRE Attack plugin
+        # Pull techniques and software used with Empire
         software, techniques = Plugin.attack_searcher(self)
         self.EmpireReport(logoDir, software, techniques)
 
@@ -80,6 +81,12 @@ class Plugin(Plugin):
 
         print(helpers.color("[*] Generating Masterlog"))
         self.masterLog(logoDir)
+
+        # Pull all techniques from MITRE database
+        # TODO: Pull all software for module report
+        techniques = Plugin.all_attacks(self)
+        print(helpers.color("[*] Generating Module Report"))
+        self.ModuleReport(logoDir, software, techniques)
 
         print(helpers.color("[+] All Reports generated"))
 
@@ -100,7 +107,6 @@ class Plugin(Plugin):
             used_techniques.append(techniques[i]['description'])
 
         # Load Template
-
         env = Environment(loader=FileSystemLoader('.'))
         template = env.get_template("./Reports/Templates/empire_report_template.md")
 
@@ -110,15 +116,19 @@ class Plugin(Plugin):
                          "platforms": tabulate(platforms, tablefmt='html'),
                          "techniques": used_techniques}
 
-        # Generate PDF from html file
+        # Save Markdown to file, if it requires editing
         md_out = template.render(template_vars)
+        file = open('./Reports/Markdown/Empire_Report.md', 'w')
+        file.write(md_out)
+        file.close()
+
+        # Generate PDF from MD file
         md2pdf("./Reports/Empire_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css', base_url='.')
         self.lock.release()
 
     def sessionReport(self, logoDir):
         conn = self.database_connect()
         conn = self.get_db_connection()
-
         self.lock.acquire()
 
         # Pull agent data from database
@@ -138,8 +148,13 @@ class Plugin(Plugin):
         template_vars = {"logo": logoDir,
                          "sessions": tabulate(sessions, tablefmt='html')}
 
-        # Generate PDF from html file
+        # Save Markdown to file, if it requires editing
         md_out = template.render(template_vars)
+        file = open('./Reports/Markdown/Sessions_Report.md', 'w')
+        file.write(md_out)
+        file.close()
+
+        # Generate PDF from MD files)
         md2pdf("./Reports/Sessions_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
                base_url='.')
         self.lock.release()
@@ -147,7 +162,6 @@ class Plugin(Plugin):
     def credentialReport(self, logoDir):
         conn = self.database_connect()
         conn = self.get_db_connection()
-
         self.lock.acquire()
 
         # Pull agent data from database
@@ -180,8 +194,13 @@ class Plugin(Plugin):
         template_vars = {"logo": logoDir,
                          "creds": tabulate(creds, tablefmt='html')}
 
-        # Generate PDF from html file
+        # Save Markdown to file, if it requires editing
         md_out = template.render(template_vars)
+        file = open('./Reports/Markdown/Credentials_Report.md', 'w')
+        file.write(md_out)
+        file.close()
+
+        # Generate PDF from MD file
         md2pdf("./Reports/Credentials_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
                base_url='.')
         self.lock.release()
@@ -189,7 +208,6 @@ class Plugin(Plugin):
     def masterLog(self, logoDir):
         conn = self.database_connect()
         conn = self.get_db_connection()
-
         self.lock.acquire()
 
         # Pull agent data from database
@@ -243,9 +261,70 @@ class Plugin(Plugin):
         template_vars = {"logo": logoDir,
                          "log": log}
 
-        # Generate PDF from html file
+        # Save Markdown to file, if it requires editing
         md_out = template.render(template_vars)
+        file = open('./Reports/Markdown/Masterlog_Report.md', 'w')
+        file.write(md_out)
+        file.close()
+
+        # Generate PDF from MD file
         md2pdf("./Reports/Masterlog_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
+               base_url='.')
+        self.lock.release()
+
+    def ModuleReport(self, logoDir, software, techniques):
+        conn = self.database_connect()
+        conn = self.get_db_connection()
+        self.lock.acquire()
+
+        # Pull agent data from database
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT DISTINCT
+            module_name
+            FROM
+            taskings
+            WHERE taskings.module_name IS NOT NULL
+                                """)
+
+        data = cur.fetchall()
+
+        TTP = list([])
+        module_name = list([])
+        for module_directory in data:
+            TTP.append(self.mainMenu.modules.modules[module_directory[0]].info['Techniques'])
+            module_name.append(self.mainMenu.modules.modules[module_directory[0]].info['Name'])
+
+        # Create list of techniques
+        used_techniques = list([])
+        for ttp_list in TTP:
+            for ttp_name in ttp_list:
+                for i in range(len(techniques)):
+                    if ttp_name in techniques[i]._inner['external_references'][0]._inner['external_id']:
+                        try:
+                            used_techniques.append('<h3>' + techniques[i]['name'] + '</h3>')
+                            used_techniques.append('**Empire Modules Used:** ' + module_name[TTP.index(ttp_list)] + '<br><br>')
+                            used_techniques.append(techniques[i]._inner['description'])
+                        except:
+                            pass
+
+        # Load Template
+        env = Environment(loader=FileSystemLoader('.'))
+        template = env.get_template("./Reports/Templates/module_report_template.md")
+
+        log = ''
+        # Add data to Jinja2 Template
+        template_vars = {"logo": logoDir,
+                        "techniques": used_techniques}
+
+        # Save Markdown to file, if it requires editing
+        md_out = template.render(template_vars)
+        file = open('./Reports/Markdown/Module_Report.md', 'w')
+        file.write(md_out)
+        file.close()
+
+        # Generate PDF from MD file
+        md2pdf("./Reports/Module_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
                base_url='.')
         self.lock.release()
 
@@ -269,7 +348,7 @@ class Plugin(Plugin):
         Connect to the default database at ./data/empire.db.
         """
         try:
-            # set the database connectiont to autocommit w/ isolation level
+            # set the database connection to autocommit w/ isolation level
             self.conn = sqlite3.connect('./data/empire.db', check_same_thread=False)
             self.conn.text_factory = str
             self.conn.isolation_level = None
