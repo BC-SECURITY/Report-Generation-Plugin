@@ -1,22 +1,11 @@
 # Report Plugin
 The report plugin replaces the original reporting functionality in [Empire](https://github.com/BC-SECURITY/Empire/) with
-customizable PDFs. The PDFs use a style.css and jinja2 template markdown files to generate the PDF reports. The style.css
+customizable PDFs. The PDFs use a style.css and Jinja2 template markdown files to generate the PDF reports. The style.css
 and markdown files can be customized with personalized logos or other information. The reports use the 
 [ATT&CK Plugin](https://github.com/BC-SECURITY/Attack-Plugin/releases) to generate two tailored reports: Empire Report 
 and Module Report. The Empire Report parses out the information about Empire and creates a PDF about the attack techniques 
-based on the MITRE ATT&Ck framework. The Module Report uses the master log to extract all of the used modules and creates
-individual sections based on the modules used. 
-
-## Report Examples
-### Empire Report
-![empire_report](https://user-images.githubusercontent.com/20302208/95686360-281cea80-0bb2-11eb-966d-0cfe035eb00b.jpg)
-
-### Masterlog
-![masterlog](https://user-images.githubusercontent.com/20302208/95686361-28b58100-0bb2-11eb-9e1f-0eadaef304f3.jpg)
-
-### Module Report
-![module_report](https://user-images.githubusercontent.com/20302208/95686362-294e1780-0bb2-11eb-8baf-a9ea9abad01c.jpg)
-
+based on the MITRE ATT&CK framework. The Module Report uses the master log to extract all of the used modules and creates
+individual sections based on the modules used. Examples of the reports can be found [here](./Reports/README.md).
 ## Getting Started
 * To run the plugin, you can download it fom the releases [Releases](https://github.com/BC-SECURITY/report-generation-plugin/releases) page. 
 
