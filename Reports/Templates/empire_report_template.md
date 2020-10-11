@@ -1,6 +1,6 @@
 ![logo](./Reports/Templates/empire.png)
 
-<center> <h1>Empire Report 1</h1> </center>
+<center> <h1>Empire Report</h1> </center>
 
 {{ description }}
 

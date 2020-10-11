@@ -1,6 +1,21 @@
 # Report Plugin
-The report plugin replaces the original reporting tool in [Empire](https://github.com/BC-SECURITY/Empire/) and replaces it with customizable PDFs.
-The current implemenation uses the style.css and templates to generate the reports with the option of using a personalized logo.
+The report plugin replaces the original reporting functionality in [Empire](https://github.com/BC-SECURITY/Empire/) with
+customizable PDFs. The PDFs use a style.css and jinja2 template markdown files to generate the PDF reports. The style.css
+and markdown files can be customized with personalized logos or other information. The reports use the 
+[ATT&CK Plugin](https://github.com/BC-SECURITY/Attack-Plugin/releases) to generate two tailored reports: Empire Report 
+and Module Report. The Empire Report parses out the information about Empire and creates a PDF about the attack techniques 
+based on the MITRE ATT&Ck framework. The Module Report uses the master log to extract all of the used modules and creates
+individual sections based on the modules used. 
+
+## Report Examples
+### Empire Report
+![empire_report](https://user-images.githubusercontent.com/20302208/95686360-281cea80-0bb2-11eb-966d-0cfe035eb00b.jpg)
+
+### Masterlog
+![masterlog](https://user-images.githubusercontent.com/20302208/95686361-28b58100-0bb2-11eb-9e1f-0eadaef304f3.jpg)
+
+### Module Report
+![module_report](https://user-images.githubusercontent.com/20302208/95686362-294e1780-0bb2-11eb-8baf-a9ea9abad01c.jpg)
 
 ## Getting Started
 * To run the plugin, you can download it fom the releases [Releases](https://github.com/BC-SECURITY/report-generation-plugin/releases) page. 
@@ -8,7 +23,12 @@ The current implemenation uses the style.css and templates to generate the repor
 ## Install
 Prerequisites:
 * Empire 3.2.3+
+* MD2PDF
 * [ATT&CK Plugin v0.1](https://github.com/BC-SECURITY/Attack-Plugin/releases)
+
+```
+pip3 install m2pdf
+```
 
 1. Add report.py to the plugins folder of Empire.
 
@@ -18,7 +38,7 @@ Prerequisites:
 
 ![image](https://user-images.githubusercontent.com/20302208/86488897-61be9980-bd17-11ea-8edc-e43fa2be3a5d.png)
 
-3. ```plugin report```
+3.  Plugins are automatically loaded into Empire as of 3.4.0, otherwise run ```plugin report```
 
 ![image](https://user-images.githubusercontent.com/20302208/86488962-9af70980-bd17-11ea-90ce-831fdc3436e7.png)
 
