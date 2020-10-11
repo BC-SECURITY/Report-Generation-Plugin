@@ -6,6 +6,7 @@ and markdown files can be customized with personalized logos or other informatio
 and Module Report. The Empire Report parses out the information about Empire and creates a PDF about the attack techniques 
 based on the MITRE ATT&CK framework. The Module Report uses the master log to extract all of the used modules and creates
 individual sections based on the modules used. Examples of the reports can be found [here](./Reports/README.md).
+
 ## Getting Started
 * To run the plugin, you can download it fom the releases [Releases](https://github.com/BC-SECURITY/report-generation-plugin/releases) page. 
 
@@ -16,7 +17,7 @@ Prerequisites:
 * [ATT&CK Plugin v0.1](https://github.com/BC-SECURITY/Attack-Plugin/releases)
 
 ```
-pip3 install m2pdf
+pip3 install md2pdf
 ```
 
 1. Add report.py to the plugins folder of Empire.
