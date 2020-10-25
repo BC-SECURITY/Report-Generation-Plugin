@@ -28,14 +28,14 @@ class Plugin(Plugin):
         """ any custom loading behavior - called by init, so any
         behavior you'd normally put in __init__ goes here """
         self.commands = {'do_report': {'Description': 'Generate customized PDF Reports',
-                                       '': ''
+                                       'arg': '[logo directory]'
                                        }
                          }
 
-    def execute(self, dict):
+    def execute(self, command_list):
         try:
-            if dict['command'] == 'do_report':
-                results = self.do_report(dict['arguments']['arg'])
+            if command_list['command'] == 'do_report':
+                results = self.do_report(command_list['arguments']['arg'])
             return results
         except:
             return False
@@ -48,15 +48,15 @@ class Plugin(Plugin):
         registering functions to be run by user commands """
         mainMenu.__class__.do_report = self.do_report
 
-    def do_report(self, args):
+    def do_report(self, *args):
         'Generate customized PDF Reports'
         # First line used for description
-
-        choice = input(helpers.color("[>] Directory to logo [./Reports/Templates/empire.png]: "))
-        if choice.lower() != '':
-            logo_dir = choice
-        else:
+        if args[0] == '':
+            print(helpers.color("[!] report [logo directory]"))
+            print(helpers.color("[*] Using default Empire logo"))
             logo_dir = "./Reports/Templates/empire.png"
+        else:
+            logo_dir = args[0]
 
         print(helpers.color("[*] Generating Empire Report"))
 
