@@ -1,16 +1,24 @@
 """Overwrites the Empire reporting function with an upgraded version"""
 from __future__ import print_function
 
+import threading
+
 from lib.common.plugins import Plugin
 from jinja2 import Environment, FileSystemLoader
 from tabulate import tabulate
 from .attack import Plugin
 from md2pdf.core import md2pdf
+from sqlalchemy import or_, and_, func
+from sqlalchemy.orm import aliased
+
+# Empire imports
 import lib.common.helpers as helpers
 import lib.common.modules as modules
-import threading
-import sqlite3
-import sys
+from lib.common.empire import MainMenu
+from lib.database.base import Session
+from lib.database import models
+
+
 
 def xstr(s):
     """Safely cast to a string with a handler for None"""
@@ -27,15 +35,34 @@ class Plugin(Plugin):
     def onLoad(self):
         """ any custom loading behavior - called by init, so any
         behavior you'd normally put in __init__ goes here """
-        self.commands = {'do_report': {'Description': 'Generate customized PDF Reports',
-                                       'arg': '[logo directory]'
-                                       }
-                         }
+        self.info = {
+                        'Name': 'report',
 
-    def execute(self, command_list):
+                        'Author': ['@Cx01N'],
+
+                        'Description': ('Generate customized PDF Reports'),
+
+                        'Software': '',
+
+                        'Techniques': [''],
+
+                        'Comments': []
+                    },
+
+        self.options = {
+                        'logo': {
+                            'Description': 'Provide directory to the logo on the teamserver.',
+                            'Required': False,
+                            'Value': './Reports/Templates/empire.png'
+                        }
+        }
+
+    def execute(self, command):
+        # This is for parsing commands through the api
         try:
-            if command_list['command'] == 'do_report':
-                results = self.do_report(command_list['arguments']['arg'])
+            # essentially switches to parse the proper command to execute
+            self.options['logo']['Value'] = command['logo']
+            results = self.do_report('')
             return results
         except:
             return False
@@ -50,34 +77,34 @@ class Plugin(Plugin):
 
     def do_report(self, *args):
         'Generate customized PDF Reports'
-        # First line used for description
-        if args[0] == '':
+
+        if len(args[0]) > 0:
+            self.logo = args[0]
+        else:
             print(helpers.color("[!] report [logo directory]"))
             print(helpers.color("[*] Using default Empire logo"))
-            logo_dir = "./Reports/Templates/empire.png"
-        else:
-            logo_dir = args[0]
+            self.logo = self.options['logo']['Value']
 
         print(helpers.color("[*] Generating Empire Report"))
 
         # Pull techniques and software used with Empire
         software, techniques = Plugin.attack_searcher(self)
-        self.EmpireReport(logo_dir, software, techniques)
+        self.EmpireReport(self.logo, software, techniques)
 
         print(helpers.color("[*] Generating Session Report"))
-        self.sessionReport(logo_dir)
+        self.sessionReport(self.logo)
 
         print(helpers.color("[*] Generating Credentials Report"))
-        self.credentialReport(logo_dir)
+        self.credentialReport(self.logo)
 
         print(helpers.color("[*] Generating Master Log"))
-        self.masterLog(logo_dir)
+        self.masterLog(self.logo)
 
         # Pull all techniques from MITRE database
         # TODO: Pull all software for module report
         techniques = Plugin.all_attacks(self)
         print(helpers.color("[*] Generating Module Report"))
-        self.ModuleReport(logo_dir, software, techniques)
+        self.ModuleReport(self.logo, software, techniques)
 
         print(helpers.color("[+] All Reports generated"))
 
@@ -123,14 +150,14 @@ class Plugin(Plugin):
         self.lock.release()
 
     def sessionReport(self, logo_dir):
-        conn = self.database_connect()
-        conn = self.get_db_connection()
         self.lock.acquire()
 
         # Pull agent data from database
-        cur = conn.cursor()
-        cur.execute('select session_id, hostname, username, checkin_time from agents')
-        data = cur.fetchall()
+        agents = Session().query(models.Agent.session_id,
+                                 models.Agent.hostname,
+                                 models.Agent.username,
+                                 models.Agent.checkin_time
+                                 ).all()
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
@@ -138,7 +165,7 @@ class Plugin(Plugin):
 
         # Add headers for table
         sessions = [('SessionID', 'Hostname', 'User Name', 'First Check-in')]
-        sessions.extend(data)
+        sessions.extend(agents)
 
         # Add data to Jinja2 Template
         template_vars = {"logo": logo_dir,
@@ -156,27 +183,15 @@ class Plugin(Plugin):
         self.lock.release()
 
     def credentialReport(self, logo_dir):
-        conn = self.database_connect()
-        conn = self.get_db_connection()
         self.lock.acquire()
 
         # Pull agent data from database
-        cur = conn.cursor()
-        cur.execute("""
-                    SELECT
-                        domain
-                        ,username
-                        ,host
-                        ,credtype
-                        ,password
-                    FROM
-                        credentials
-                    ORDER BY
-                        domain
-                        ,credtype
-                        ,host
-                    """)
-        data = cur.fetchall()
+        data = Session().query(models.Credential.domain,
+                               models.Credential.username,
+                               models.Credential.host,
+                               models.Credential.credtype,
+                               models.Credential.password
+                               ).all()
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
@@ -202,40 +217,8 @@ class Plugin(Plugin):
         self.lock.release()
 
     def masterLog(self, logo_dir):
-        conn = self.database_connect()
-        conn = self.get_db_connection()
         self.lock.acquire()
-
-        # Pull agent data from database
-        cur = conn.cursor()
-        cur.execute("""
-                   SELECT
-                       reporting.timestamp,
-                       event_type,
-                       u.username,
-                       substr(reporting.name, pos+1) as agent_name,
-                       a.hostname,
-                       taskID,
-                       t.data as "Task",
-                       r.data as "Results"
-                   FROM
-                   (
-                       SELECT
-                           timestamp,
-                           event_type,
-                           name,
-                           instr(name, '/') as pos,
-                           taskID
-                       FROM reporting
-                       WHERE name LIKE 'agent%'
-                       AND reporting.event_type == 'task' OR reporting.event_type == 'checkin') reporting
-                       LEFT OUTER JOIN taskings t on (reporting.taskID = t.id) AND (agent_name = t.agent)
-                       LEFT OUTER JOIN results r on (reporting.taskID = r.id) AND (agent_name = r.agent)
-                       JOIN agents a on agent_name = a.session_id
-                       LEFT OUTER JOIN users u on t.user_id = u.id
-                   """)
-
-        data = cur.fetchall()
+        data = self.run_report_query()
 
         # Format text as a string and print to new line
         log = ''
@@ -269,27 +252,19 @@ class Plugin(Plugin):
         self.lock.release()
 
     def ModuleReport(self, logo_dir, software, techniques):
-        conn = self.database_connect()
-        conn = self.get_db_connection()
         self.lock.acquire()
 
         # Pull agent data from database
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT DISTINCT
-            module_name
-            FROM
-            taskings
-            WHERE taskings.module_name IS NOT NULL
-                                """)
-
-        data = cur.fetchall()
+        data = Session().query(models.Tasking.module_name.distinct()).filter(models.Tasking.module_name != None).all()
 
         ttp = list([])
         module_name = list([])
         for module_directory in data:
-            ttp.append(self.mainMenu.modules.modules[module_directory[0]].info['Techniques'])
-            module_name.append(self.mainMenu.modules.modules[module_directory[0]].info['Name'])
+            try:
+                ttp.append(self.mainMenu.modules.modules[module_directory[0]].info['Techniques'])
+                module_name.append(self.mainMenu.modules.modules[module_directory[0]].info['Name'])
+            except:
+                continue
 
         # Create list of techniques
         used_techniques = list([])
@@ -325,27 +300,36 @@ class Plugin(Plugin):
                base_url='.')
         self.lock.release()
 
-    def get_db_connection(self):
-        """
-        Returns the
-        """
-        self.lock.acquire()
-        self.conn.row_factory = None
-        self.lock.release()
-        return self.conn
+    def run_report_query(self):
+        reporting_sub_query = Session()\
+            .query(models.Reporting, self.substring(Session(), models.Reporting.name, '/').label('agent_name'))\
+            .filter(and_(models.Reporting.name.ilike('agent%'),
+                         or_(models.Reporting.event_type == 'task',
+                             models.Reporting.event_type == 'checkin')))\
+            .subquery()
 
-    def database_connect(self):
-        """
-        Connect to the default database at ./data/empire.db.
-        """
-        try:
-            # set the database connection to autocommit w/ isolation level
-            self.conn = sqlite3.connect('./data/empire.db', check_same_thread=False)
-            self.conn.text_factory = str
-            self.conn.isolation_level = None
-            return self.conn
+        return Session()\
+            .query(reporting_sub_query.c.timestamp,
+                   reporting_sub_query.c.event_type,
+                   reporting_sub_query.c.agent_name,
+                   reporting_sub_query.c.taskID,
+                   models.Agent.hostname,
+                   models.User.username,
+                   models.Tasking.data.label('task'),
+                   models.Result.data.label('results'))\
+            .join(models.Tasking, and_(models.Tasking.id == reporting_sub_query.c.taskID,
+                                       models.Tasking.agent == reporting_sub_query.c.agent_name), isouter=True)\
+            .join(models.Result, and_(models.Result.id == reporting_sub_query.c.taskID,
+                                      models.Result.agent == reporting_sub_query.c.agent_name), isouter=True)\
+            .join(models.User, models.User.id == models.Tasking.user_id, isouter=True)\
+            .join(models.Agent, models.Agent.session_id == reporting_sub_query.c.agent_name, isouter=True)\
+            .all()
 
-        except Exception:
-            print(helpers.color("[!] Could not connect to database"))
-            print(helpers.color("[!] Please run database_setup.py"))
-            sys.exit()
+    def substring(self, session, column, delimeter):
+        """
+        https://stackoverflow.com/a/57763081
+        """
+        if session.bind.dialect.name == 'sqlite':
+            return func.substr(column, func.instr(column, delimeter) + 1)
+        elif session.bind.dialect.name == 'mysql':
+            return func.substring_index(column, delimeter, -1)
