@@ -1,46 +1,34 @@
-"""Overwrites the Empire reporting function with an upgraded version"""
 from __future__ import print_function
 
 import threading
 
-from lib.common.plugins import Plugin
 from jinja2 import Environment, FileSystemLoader
 from tabulate import tabulate
 from .attack import Plugin
 from md2pdf.core import md2pdf
 from sqlalchemy import or_, and_, func
-from sqlalchemy.orm import aliased
 
 # Empire imports
 import lib.common.helpers as helpers
-import lib.common.modules as modules
-from lib.common.empire import MainMenu
 from lib.database.base import Session
 from lib.database import models
 
 
-
-def xstr(s):
-    """Safely cast to a string with a handler for None"""
-    if s is None:
-        return ''
-    return str(s)
-
-
-# this class MUST be named Plugin
 class Plugin(Plugin):
-    description = "Generate customized PDF Reports"
+    description = "Generate enhanced reports and Markdown files for customized PDF reports"
     lock = threading.Lock()
 
     def onLoad(self):
-        """ any custom loading behavior - called by init, so any
-        behavior you'd normally put in __init__ goes here """
+        """
+        any custom loading behavior - called by init, so any
+        behavior you'd normally put in __init__ goes here
+        """
         self.info = {
                         'Name': 'report',
 
                         'Author': ['@Cx01N'],
 
-                        'Description': ('Generate customized PDF Reports'),
+                        'Description': 'Generate enhanced reports and Markdown files for customized PDF reports',
 
                         'Software': '',
 
@@ -71,13 +59,16 @@ class Plugin(Plugin):
         return self.commands
 
     def register(self, mainMenu):
-        """ any modifications to the mainMenu go here - e.g.
-        registering functions to be run by user commands """
+        """
+        Any modifications to the mainMenu go here - e.g.
+        registering functions to be run by user commands
+        """
         mainMenu.__class__.do_report = self.do_report
 
     def do_report(self, *args):
-        'Generate customized PDF Reports'
-
+        """
+        Generate enhanced reports and Markdown files for customized PDF reports
+        """
         if len(args[0]) > 0:
             self.logo = args[0]
         else:
@@ -89,30 +80,32 @@ class Plugin(Plugin):
 
         # Pull techniques and software used with Empire
         software, techniques = Plugin.attack_searcher(self)
-        self.EmpireReport(self.logo, software, techniques)
+        self.empire_report(self.logo, software, techniques)
 
         print(helpers.color("[*] Generating Session Report"))
-        self.sessionReport(self.logo)
+        self.session_report(self.logo)
 
         print(helpers.color("[*] Generating Credentials Report"))
-        self.credentialReport(self.logo)
+        self.credential_report(self.logo)
 
         print(helpers.color("[*] Generating Master Log"))
-        self.masterLog(self.logo)
+        self.master_log(self.logo)
 
         # Pull all techniques from MITRE database
         # TODO: Pull all software for module report
         techniques = Plugin.all_attacks(self)
         print(helpers.color("[*] Generating Module Report"))
-        self.ModuleReport(self.logo, software, techniques)
+        self.module_report(self.logo, software, techniques)
 
         print(helpers.color("[+] All Reports generated"))
 
     def shutdown(self):
-        """if the plugin spawns a process provide a shutdown method for when Empire exits else leave it as pass"""
+        """
+        if the plugin spawns a process provide a shutdown method for when Empire exits else leave it as pass
+        """
         return
 
-    def EmpireReport(self, logo_dir, software, techniques):
+    def empire_report(self, logo_dir, software, techniques):
         self.lock.acquire()
 
         # Set info from database
@@ -149,7 +142,7 @@ class Plugin(Plugin):
                base_url='.')
         self.lock.release()
 
-    def sessionReport(self, logo_dir):
+    def session_report(self, logo_dir):
         self.lock.acquire()
 
         # Pull agent data from database
@@ -182,7 +175,7 @@ class Plugin(Plugin):
                base_url='.')
         self.lock.release()
 
-    def credentialReport(self, logo_dir):
+    def credential_report(self, logo_dir):
         self.lock.acquire()
 
         # Pull agent data from database
@@ -216,7 +209,7 @@ class Plugin(Plugin):
                base_url='.')
         self.lock.release()
 
-    def masterLog(self, logo_dir):
+    def master_log(self, logo_dir):
         self.lock.acquire()
         data = self.run_report_query()
 
@@ -251,7 +244,7 @@ class Plugin(Plugin):
                base_url='.')
         self.lock.release()
 
-    def ModuleReport(self, logo_dir, software, techniques):
+    def module_report(self, logo_dir, software, techniques):
         self.lock.acquire()
 
         # Pull agent data from database
@@ -333,3 +326,10 @@ class Plugin(Plugin):
             return func.substr(column, func.instr(column, delimeter) + 1)
         elif session.bind.dialect.name == 'mysql':
             return func.substring_index(column, delimeter, -1)
+
+
+def xstr(s):
+    """Safely cast to a string with a handler for None"""
+    if s is None:
+        return ''
+    return str(s)
