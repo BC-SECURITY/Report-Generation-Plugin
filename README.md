@@ -12,9 +12,9 @@ individual sections based on the modules used. Examples of the reports can be fo
 
 ## Install
 Prerequisites:
-* Empire 3.2.3+
+* Empire 3.7.0+
 * MD2PDF
-* [ATT&CK Plugin v0.1](https://github.com/BC-SECURITY/Attack-Plugin/releases)
+* [ATT&CK Plugin v0.2](https://github.com/BC-SECURITY/Attack-Plugin/releases)
 
 ```
 pip3 install md2pdf
@@ -34,6 +34,6 @@ pip3 install md2pdf
 
 4. ```report```
 
-__Note:__ The Report Plugin replaces the original reporting funcationality.
+__Note:__ The Report Plugin replaces the original reporting functionality.
 
 ![image](https://user-images.githubusercontent.com/20302208/86488991-bc57f580-bd17-11ea-8ac0-9b8ef62ec088.png)
