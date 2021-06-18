@@ -9,7 +9,6 @@ from sqlalchemy import or_, and_, func
 from empire.server.plugins.MITRE_ATTACK import Plugin
 from empire.server.database import models
 from empire.server.database.base import Session
-import empire.server.common.helpers as helpers
 
 
 class Plugin(Plugin):
@@ -69,28 +68,28 @@ class Plugin(Plugin):
         """
 
         self.logo = self.options['logo']['Value']
-        print(helpers.color("[*] Generating Empire Report"))
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Empire Report")
 
         # Pull techniques and software used with Empire
         software, techniques = Plugin.attack_searcher(self)
         self.empire_report(self.logo, software, techniques)
 
-        print(helpers.color("[*] Generating Session Report"))
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Session Report")
         self.session_report(self.logo)
 
-        print(helpers.color("[*] Generating Credentials Report"))
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Credentials Report")
         self.credential_report(self.logo)
 
-        print(helpers.color("[*] Generating Master Log"))
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Master Log Report")
         self.master_log(self.logo)
 
-        # Pull all techniques from MITRE database
         # TODO: Pull all software for module report
+        # Pull all techniques from MITRE database
         techniques = Plugin.all_attacks(self)
-        print(helpers.color("[*] Generating Module Report"))
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Module Report")
         self.module_report(self.logo, software, techniques)
 
-        print(helpers.color("[+] All Reports generated"))
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[+] All Reports generated")
 
     def shutdown(self):
         """
@@ -99,8 +98,6 @@ class Plugin(Plugin):
         return
 
     def empire_report(self, logo_dir, software, techniques):
-        self.lock.acquire()
-
         # Set info from database
         description = software['description']
 
@@ -133,11 +130,8 @@ class Plugin(Plugin):
         # Generate PDF from MD file
         md2pdf("./empire/server/Reports/Empire_Report.pdf", md_content=md_out, css_file_path='./empire/server/Reports/Templates/style.css',
                base_url='.')
-        self.lock.release()
 
     def session_report(self, logo_dir):
-        self.lock.acquire()
-
         # Pull agent data from database
         agents = Session().query(models.Agent.session_id,
                                  models.Agent.hostname,
@@ -166,11 +160,8 @@ class Plugin(Plugin):
         # Generate PDF from MD files)
         md2pdf("./empire/server/Reports/Sessions_Report.pdf", md_content=md_out, css_file_path='./empire/server/Reports/Templates/style.css',
                base_url='.')
-        self.lock.release()
 
     def credential_report(self, logo_dir):
-        self.lock.acquire()
-
         # Pull agent data from database
         data = Session().query(models.Credential.domain,
                                models.Credential.username,
@@ -200,10 +191,8 @@ class Plugin(Plugin):
         # Generate PDF from MD file
         md2pdf("./empire/server/Reports/Credentials_Report.pdf", md_content=md_out, css_file_path='./empire/server/Reports/Templates/style.css',
                base_url='.')
-        self.lock.release()
 
     def master_log(self, logo_dir):
-        self.lock.acquire()
         data = self.run_report_query()
 
         # Format text as a string and print to new line
@@ -235,11 +224,8 @@ class Plugin(Plugin):
         # Generate PDF from MD file
         md2pdf("./empire/server/Reports/Masterlog_Report.pdf", md_content=md_out, css_file_path='./empire/server/Reports/Templates/style.css',
                base_url='.')
-        self.lock.release()
 
     def module_report(self, logo_dir, software, techniques):
-        self.lock.acquire()
-
         # Pull agent data from database
         data = Session().query(models.Tasking.module_name.distinct()).filter(
             models.Tasking.module_name != None).all()
@@ -285,7 +271,6 @@ class Plugin(Plugin):
         # Generate PDF from MD file
         md2pdf("./empire/server/Reports/Module_Report.pdf", md_content=md_out, css_file_path='./empire/server/Reports/Templates/style.css',
                base_url='.')
-        self.lock.release()
 
     def run_report_query(self):
         reporting_sub_query = Session() \
