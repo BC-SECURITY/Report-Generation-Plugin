@@ -23,6 +23,8 @@ Prerequisites:
 
 ![image](https://user-images.githubusercontent.com/20302208/86488897-61be9980-bd17-11ea-8edc-e43fa2be3a5d.png)
 
+3. Install MD2PDF: `sudo poetry add md2pdf`
+
 ## Usage
 ### Client
 ![empire_report](https://user-images.githubusercontent.com/20302208/122622654-36c77580-d04e-11eb-81fa-d0acc0ac5ece.gif)
