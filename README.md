@@ -7,18 +7,13 @@ and Module Report. The Empire Report parses out the information about Empire and
 based on the MITRE ATT&CK framework. The Module Report uses the master log to extract all of the used modules and creates
 individual sections based on the modules used. Examples of the reports can be found [here](./Reports/README.md).
 
-## Getting Started
-* To run the plugin, you can download it fom the releases [Releases](https://github.com/BC-SECURITY/report-generation-plugin/releases) page. 
-
 ## Install
-Prerequisites:
-* Empire 3.7.0+
-* MD2PDF
-* [ATT&CK Plugin v0.2](https://github.com/BC-SECURITY/Attack-Plugin/releases)
+* To run the plugin, you can download it fom the releases [Releases](https://github.com/BC-SECURITY/Attack-Plugin/releases) page. 
 
-```
-pip3 install md2pdf
-```
+Prerequisites:
+- Empire 3.7.0+
+- MD2PDF
+- [ATT&CK Plugin v1.0](https://github.com/BC-SECURITY/Attack-Plugin/releases)
 
 1. Add report.py to the plugins folder of Empire.
 
@@ -28,12 +23,9 @@ pip3 install md2pdf
 
 ![image](https://user-images.githubusercontent.com/20302208/86488897-61be9980-bd17-11ea-8edc-e43fa2be3a5d.png)
 
-3.  Plugins are automatically loaded into Empire as of 3.4.0, otherwise run ```plugin report```
+3. Install MD2PDF: `sudo poetry add md2pdf`
 
-![image](https://user-images.githubusercontent.com/20302208/86488962-9af70980-bd17-11ea-90ce-831fdc3436e7.png)
+## Usage
+### Client
+![empire_report](https://user-images.githubusercontent.com/20302208/122622654-36c77580-d04e-11eb-81fa-d0acc0ac5ece.gif)
 
-4. ```report```
-
-__Note:__ The Report Plugin replaces the original reporting functionality.
-
-![image](https://user-images.githubusercontent.com/20302208/86488991-bc57f580-bd17-11ea-8ac0-9b8ef62ec088.png)

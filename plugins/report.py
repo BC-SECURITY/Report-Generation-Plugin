@@ -1,17 +1,14 @@
 from __future__ import print_function
 
 import threading
-
 from jinja2 import Environment, FileSystemLoader
 from tabulate import tabulate
-from .attack import Plugin
 from md2pdf.core import md2pdf
 from sqlalchemy import or_, and_, func
 
-# Empire imports
-import lib.common.helpers as helpers
-from lib.database.base import Session
-from lib.database import models
+from empire.server.plugins.MITRE_ATTACK import Plugin
+from empire.server.database import models
+from empire.server.database.base import Session
 
 
 class Plugin(Plugin):
@@ -38,11 +35,11 @@ class Plugin(Plugin):
                     },
 
         self.options = {
-                        'logo': {
-                            'Description': 'Provide directory to the logo on the teamserver.',
-                            'Required': False,
-                            'Value': './Reports/Templates/empire.png'
-                        }
+            'logo': {
+                'Description': 'Provide directory to the logo on the teamserver.',
+                'Required': True,
+                'Value': './empire/server/Reports/Templates/empire.png'
+            }
         }
 
     def execute(self, command):
@@ -50,7 +47,7 @@ class Plugin(Plugin):
         try:
             # essentially switches to parse the proper command to execute
             self.options['logo']['Value'] = command['logo']
-            results = self.do_report('')
+            results = self.pdf_report('')
             return results
         except:
             return False
@@ -63,41 +60,36 @@ class Plugin(Plugin):
         Any modifications to the mainMenu go here - e.g.
         registering functions to be run by user commands
         """
-        mainMenu.__class__.do_report = self.do_report
+        mainMenu.__class__.pdf_report = self.pdf_report
 
-    def do_report(self, *args):
+    def pdf_report(self, *args):
         """
         Generate enhanced reports and Markdown files for customized PDF reports
         """
-        if len(args[0]) > 0:
-            self.logo = args[0]
-        else:
-            print(helpers.color("[!] report [logo directory]"))
-            print(helpers.color("[*] Using default Empire logo"))
-            self.logo = self.options['logo']['Value']
 
-        print(helpers.color("[*] Generating Empire Report"))
+        self.logo = self.options['logo']['Value']
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Empire Report")
 
         # Pull techniques and software used with Empire
         software, techniques = Plugin.attack_searcher(self)
         self.empire_report(self.logo, software, techniques)
 
-        print(helpers.color("[*] Generating Session Report"))
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Session Report")
         self.session_report(self.logo)
 
-        print(helpers.color("[*] Generating Credentials Report"))
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Credentials Report")
         self.credential_report(self.logo)
 
-        print(helpers.color("[*] Generating Master Log"))
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Master Log Report")
         self.master_log(self.logo)
 
-        # Pull all techniques from MITRE database
         # TODO: Pull all software for module report
+        # Pull all techniques from MITRE database
         techniques = Plugin.all_attacks(self)
-        print(helpers.color("[*] Generating Module Report"))
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Module Report")
         self.module_report(self.logo, software, techniques)
 
-        print(helpers.color("[+] All Reports generated"))
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[+] All Reports generated")
 
     def shutdown(self):
         """
@@ -106,8 +98,6 @@ class Plugin(Plugin):
         return
 
     def empire_report(self, logo_dir, software, techniques):
-        self.lock.acquire()
-
         # Set info from database
         description = software['description']
 
@@ -123,7 +113,7 @@ class Plugin(Plugin):
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
-        template = env.get_template("./Reports/Templates/empire_report_template.md")
+        template = env.get_template("./empire/server/Reports/Templates/empire_report_template.md")
 
         # Add data to Jinja2 Template
         template_vars = {"logo": logo_dir,
@@ -133,18 +123,15 @@ class Plugin(Plugin):
 
         # Save Markdown to file, if it requires editing
         md_out = template.render(template_vars)
-        file = open('./Reports/Markdown/Empire_Report.md', 'w')
+        file = open('./empire/server/Reports/Markdown/Empire_Report.md', 'w')
         file.write(md_out)
         file.close()
 
         # Generate PDF from MD file
-        md2pdf("./Reports/Empire_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
+        md2pdf("./empire/server/Reports/Empire_Report.pdf", md_content=md_out, css_file_path='./empire/server/Reports/Templates/style.css',
                base_url='.')
-        self.lock.release()
 
     def session_report(self, logo_dir):
-        self.lock.acquire()
-
         # Pull agent data from database
         agents = Session().query(models.Agent.session_id,
                                  models.Agent.hostname,
@@ -154,7 +141,7 @@ class Plugin(Plugin):
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
-        template = env.get_template("./Reports/Templates/sessions_template.md")
+        template = env.get_template("./empire/server/Reports/Templates/sessions_template.md")
 
         # Add headers for table
         sessions = [('SessionID', 'Hostname', 'User Name', 'First Check-in')]
@@ -166,18 +153,15 @@ class Plugin(Plugin):
 
         # Save Markdown to file, if it requires editing
         md_out = template.render(template_vars)
-        file = open('./Reports/Markdown/Sessions_Report.md', 'w')
+        file = open('./empire/server/Reports/Markdown/Sessions_Report.md', 'w')
         file.write(md_out)
         file.close()
 
         # Generate PDF from MD files)
-        md2pdf("./Reports/Sessions_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
+        md2pdf("./empire/server/Reports/Sessions_Report.pdf", md_content=md_out, css_file_path='./empire/server/Reports/Templates/style.css',
                base_url='.')
-        self.lock.release()
 
     def credential_report(self, logo_dir):
-        self.lock.acquire()
-
         # Pull agent data from database
         data = Session().query(models.Credential.domain,
                                models.Credential.username,
@@ -188,7 +172,7 @@ class Plugin(Plugin):
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
-        template = env.get_template("./Reports/Templates/credentials_template.md")
+        template = env.get_template("./empire/server/Reports/Templates/credentials_template.md")
 
         # Add headers for table
         creds = [('Domain', 'Username', 'Host', 'Cred Type', 'Password')]
@@ -200,17 +184,15 @@ class Plugin(Plugin):
 
         # Save Markdown to file, if it requires editing
         md_out = template.render(template_vars)
-        file = open('./Reports/Markdown/Credentials_Report.md', 'w')
+        file = open('./empire/server/Reports/Markdown/Credentials_Report.md', 'w')
         file.write(md_out)
         file.close()
 
         # Generate PDF from MD file
-        md2pdf("./Reports/Credentials_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
+        md2pdf("./empire/server/Reports/Credentials_Report.pdf", md_content=md_out, css_file_path='./empire/server/Reports/Templates/style.css',
                base_url='.')
-        self.lock.release()
 
     def master_log(self, logo_dir):
-        self.lock.acquire()
         data = self.run_report_query()
 
         # Format text as a string and print to new line
@@ -227,7 +209,7 @@ class Plugin(Plugin):
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
-        template = env.get_template("./Reports/Templates/masterlog_template.md")
+        template = env.get_template("./empire/server/Reports/Templates/masterlog_template.md")
 
         # Add data to Jinja2 Template
         template_vars = {"logo": logo_dir,
@@ -235,20 +217,18 @@ class Plugin(Plugin):
 
         # Save Markdown to file, if it requires editing
         md_out = template.render(template_vars)
-        file = open('./Reports/Markdown/Masterlog_Report.md', 'w')
+        file = open('./empire/server/Reports/Markdown/Masterlog_Report.md', 'w')
         file.write(md_out)
         file.close()
 
         # Generate PDF from MD file
-        md2pdf("./Reports/Masterlog_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
+        md2pdf("./empire/server/Reports/Masterlog_Report.pdf", md_content=md_out, css_file_path='./empire/server/Reports/Templates/style.css',
                base_url='.')
-        self.lock.release()
 
     def module_report(self, logo_dir, software, techniques):
-        self.lock.acquire()
-
         # Pull agent data from database
-        data = Session().query(models.Tasking.module_name.distinct()).filter(models.Tasking.module_name != None).all()
+        data = Session().query(models.Tasking.module_name.distinct()).filter(
+            models.Tasking.module_name != None).all()
 
         ttp = list([])
         module_name = list([])
@@ -275,7 +255,7 @@ class Plugin(Plugin):
 
         # Load Template
         env = Environment(loader=FileSystemLoader('.'))
-        template = env.get_template("./Reports/Templates/module_report_template.md")
+        template = env.get_template("./empire/server/Reports/Templates/module_report_template.md")
 
         log = ''
         # Add data to Jinja2 Template
@@ -284,38 +264,35 @@ class Plugin(Plugin):
 
         # Save Markdown to file, if it requires editing
         md_out = template.render(template_vars)
-        file = open('./Reports/Markdown/Module_Report.md', 'w')
+        file = open('./empire/server/Reports/Markdown/Module_Report.md', 'w')
         file.write(md_out)
         file.close()
 
         # Generate PDF from MD file
-        md2pdf("./Reports/Module_Report.pdf", md_content=md_out, css_file_path='./Reports/Templates/style.css',
+        md2pdf("./empire/server/Reports/Module_Report.pdf", md_content=md_out, css_file_path='./empire/server/Reports/Templates/style.css',
                base_url='.')
-        self.lock.release()
 
     def run_report_query(self):
-        reporting_sub_query = Session()\
-            .query(models.Reporting, self.substring(Session(), models.Reporting.name, '/').label('agent_name'))\
+        reporting_sub_query = Session() \
+            .query(models.Reporting, self.substring(Session(), models.Reporting.name, '/').label('agent_name')) \
             .filter(and_(models.Reporting.name.ilike('agent%'),
                          or_(models.Reporting.event_type == 'task',
-                             models.Reporting.event_type == 'checkin')))\
+                             models.Reporting.event_type == 'checkin'))) \
             .subquery()
 
-        return Session()\
+        return Session() \
             .query(reporting_sub_query.c.timestamp,
                    reporting_sub_query.c.event_type,
                    reporting_sub_query.c.agent_name,
                    reporting_sub_query.c.taskID,
                    models.Agent.hostname,
                    models.User.username,
-                   models.Tasking.data.label('task'),
-                   models.Result.data.label('results'))\
+                   models.Tasking.input.label('task'),
+                   models.Tasking.output.label('results')) \
             .join(models.Tasking, and_(models.Tasking.id == reporting_sub_query.c.taskID,
-                                       models.Tasking.agent == reporting_sub_query.c.agent_name), isouter=True)\
-            .join(models.Result, and_(models.Result.id == reporting_sub_query.c.taskID,
-                                      models.Result.agent == reporting_sub_query.c.agent_name), isouter=True)\
-            .join(models.User, models.User.id == models.Tasking.user_id, isouter=True)\
-            .join(models.Agent, models.Agent.session_id == reporting_sub_query.c.agent_name, isouter=True)\
+                                       models.Tasking.agent == reporting_sub_query.c.agent_name), isouter=True) \
+            .join(models.User, models.User.id == models.Tasking.user_id, isouter=True) \
+            .join(models.Agent, models.Agent.session_id == reporting_sub_query.c.agent_name, isouter=True) \
             .all()
 
     def substring(self, session, column, delimeter):
@@ -326,6 +303,20 @@ class Plugin(Plugin):
             return func.substr(column, func.instr(column, delimeter) + 1)
         elif session.bind.dialect.name == 'mysql':
             return func.substring_index(column, delimeter, -1)
+
+    def register(self, mainMenu):
+        """
+        Any modifications to the mainMenu go here - e.g.
+        registering functions to be run by user commands
+        """
+        pass
+
+    def shutdown(self):
+        """
+        Kills additional processes that were spawned
+        """
+        # If the plugin spawns a process provide a shutdown method for when Empire exits else leave it as pass
+        pass
 
 
 def xstr(s):
