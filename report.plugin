@@ -1,0 +1,327 @@
+from __future__ import print_function
+
+import threading
+from jinja2 import Environment, FileSystemLoader
+from tabulate import tabulate
+from md2pdf.core import md2pdf
+from sqlalchemy import or_, and_, func
+
+from empire.server.database import models
+from empire.server.database.base import Session
+from empire.server.plugins.report.mitre import Attack
+import empire.server.common.helpers as helpers
+from empire.server.common.plugins import Plugin
+
+
+class Plugin(Plugin):
+    description = "Generate enhanced reports and markdown files for customized PDF reports"
+    lock = threading.Lock()
+
+    def onLoad(self):
+        """
+        any custom loading behavior - called by init, so any
+        behavior you'd normally put in __init__ goes here
+        """
+        self.info = {
+                        'Name': 'report',
+
+                        'Author': ['@Cx01N'],
+
+                        'Description': 'Generate enhanced reports and markdown files for customized PDF reports',
+
+                        'Software': '',
+
+                        'Techniques': [''],
+
+                        'Comments': []
+                    },
+
+        self.options = {
+            'report': {
+                'Description': 'Report to generate by the server.',
+                'Required': True,
+                'Value': 'all',
+                "SuggestedValues": ["all", "empire", "session", "credential", "master", "module"],
+                "Strict": True,
+            }
+        }
+
+    def execute(self, command):
+        # This is for parsing commands through the api
+        try:
+            report_type = self.options['report']['Value']
+
+            if report_type == 'all':
+                self.pdf_report()
+            elif report_type == 'empire':
+                self.empire_report()
+            elif report_type == 'session':
+                self.session_report()
+            elif report_type == 'credential':
+                self.credential_report()
+            elif report_type == 'master':
+                self.master_log()
+            elif report_type == 'module:':
+                self.module_report()
+
+            return True
+        except Exception as e:
+            print(e)
+            self.main_menu.plugin_socketio_message(self.info["Name"], f"[!] {e}")
+            return False
+
+    def get_commands(self):
+        return self.commands
+
+    def register(self, mainMenu):
+        """
+        Any modifications to the mainMenu go here - e.g.
+        registering functions to be run by user commands
+        """
+        mainMenu.__class__.pdf_report = self.pdf_report
+
+    def pdf_report(self):
+        """
+        Generate enhanced reports and markdown files for customized PDF reports
+        """
+
+        self.logo = self.mainMenu.installPath + '/plugins/report/templates/empire.png'
+
+        self.empire_report()
+        self.session_report()
+        self.credential_report()
+        self.master_log()
+        self.module_report()
+
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[+] All report generated")
+
+    def generate_pdf(self, md_template: str, temp_var: dict, md_file: str, pdf_out:str):
+        """
+        Generate pdf from markdown files using mustache templating
+        """
+        env = Environment(loader=FileSystemLoader(self.mainMenu.installPath + "/plugins/report/templates/"))
+        template = env.get_template(md_template)
+
+        # Save markdown to file, if it requires editing
+        md_out = template.render(temp_var)
+        file = open(md_file, 'w')
+        file.write(md_out)
+        file.close()
+
+        # Generate PDF from MD file
+        md2pdf(pdf_out, md_content=md_out, css_file_path=self.mainMenu.installPath + '/plugins/report/templates/style.css',
+               base_url='.')
+
+    def empire_report(self):
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Empire Report")
+
+        # Pull techniques and software used with Empire
+        software, techniques = Attack(self.mainMenu).attack_searcher()
+
+        # Set info from database
+        description = software['description']
+
+        # Switch rows and columns of platforms
+        platforms = software['x_mitre_platforms']
+        platforms = [[platforms[j] for j in range(len(platforms))]]
+
+        # Create list of techniques
+        used_techniques = list([])
+        for i in range(len(techniques)):
+            used_techniques.append('<h3>' + techniques[i]['name'] + '</h3>')
+            used_techniques.append(techniques[i]['description'])
+
+        # Add data to Jinja2 Template
+        template_vars = {"logo": self.logo,
+                         "description": description,
+                         "platforms": tabulate(platforms, tablefmt='html'),
+                         "techniques": used_techniques}
+
+        self.generate_pdf(md_template='empire_report_template.md', temp_var=template_vars,
+                          md_file=self.mainMenu.installPath + '/plugins/report/markdown/Empire_Report.md',
+                          pdf_out=self.mainMenu.installPath + '/plugins/report/Empire_Report.pdf')
+
+    def session_report(self):
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Session Report")
+
+        # Pull agent data from database
+        agents = Session().query(models.Agent.session_id,
+                                 models.Agent.hostname,
+                                 models.Agent.username,
+                                 models.Agent.checkin_time
+                                 ).all()
+
+        # Add headers for table
+        sessions = [('SessionID', 'Hostname', 'User Name', 'First Check-in')]
+        sessions.extend(agents)
+
+        # Add data to Jinja2 Template
+        template_vars = {"logo": self.logo,
+                         "sessions": tabulate(sessions, tablefmt='html')}
+
+        self.generate_pdf(md_template='sessions_template.md', temp_var=template_vars,
+                          md_file=self.mainMenu.installPath + '/plugins/report/markdown/Sessions_Report.md',
+                          pdf_out=self.mainMenu.installPath + '/plugins/report/Sessions_Report.pdf')
+
+    def credential_report(self):
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Credentials Report")
+
+        # Pull agent data from database
+        data = Session().query(models.Credential.domain,
+                               models.Credential.username,
+                               models.Credential.host,
+                               models.Credential.credtype,
+                               models.Credential.password
+                               ).all()
+
+        # Add headers for table
+        creds = [('Domain', 'Username', 'Host', 'Cred Type', 'Password')]
+        creds.extend(data)
+
+        # Add data to Jinja2 Template
+        template_vars = {"logo": self.logo,
+                         "creds": tabulate(creds, tablefmt='html')}
+
+        self.generate_pdf(md_template='credentials_template.md', temp_var=template_vars,
+                          md_file=self.mainMenu.installPath + '/plugins/report/markdown/Credentials_Report.md',
+                          pdf_out=self.mainMenu.installPath + '/plugins/report/Credentials_Report.pdf')
+
+    def master_log(self):
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Master Log Report")
+
+        data = self.run_report_query()
+
+        # Format text as a string and print to new line
+        log = ''
+        for row in data:
+            row = list(row)
+            for n in range(len(row)):
+                if isinstance(row[n], bytes):
+                    row[n] = row[n].decode('UTF-8')
+                if type(row[n]) == str:
+                    row[n] = str(row[n]).replace('\n', ' <br> ')
+            log = log + ' <br> ' + xstr(row[0]) + ' - ' + xstr(row[3]) + ' (' + xstr(row[2]) + ')> ' + xstr(
+                row[5]) + xstr(row[6]) + xstr(row[7]) + ' <br> '
+
+        # Add data to Jinja2 Template
+        template_vars = {"logo": self.logo,
+                         "log": log}
+
+        self.generate_pdf(md_template='masterlog_template.md', temp_var=template_vars,
+                          md_file=self.mainMenu.installPath + '/plugins/report/markdown/Masterlog_Report.md',
+                          pdf_out=self.mainMenu.installPath + '/plugins/report/Masterlog_Report.pdf')
+
+    def module_report(self):
+        # TODO: Pull all software for module report
+        #software, techniques = Attack(self.mainMenu).attack_searcher()
+
+        # Pull all techniques from MITRE database
+        techniques = Attack(self.mainMenu).all_attacks()
+        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Module Report")
+
+        # Pull agent data from database
+        data = Session().query(models.Tasking.module_name.distinct()).filter(
+            models.Tasking.module_name != None).all()
+
+        ttp = list([])
+        module_name = list([])
+        for module_directory in data:
+            try:
+                ttp.append(self.mainMenu.modules.modules[module_directory[0]].info['Techniques'])
+                module_name.append(self.mainMenu.modules.modules[module_directory[0]].info['Name'])
+            except:
+                continue
+
+        # Create list of techniques
+        used_techniques = list([])
+        for ttp_list in ttp:
+            for ttp_name in ttp_list:
+                for i in range(len(techniques)):
+                    if ttp_name in techniques[i]._inner['external_references'][0]._inner['external_id']:
+                        try:
+                            used_techniques.append('<h3>' + techniques[i]['name'] + '</h3>')
+                            used_techniques.append(
+                                '**Empire Modules Used:** ' + module_name[ttp.index(ttp_list)] + '<br><br>')
+                            used_techniques.append(techniques[i]._inner['description'])
+                        except:
+                            pass
+
+        # Add data to Jinja2 Template
+        template_vars = {"logo": self.logo,
+                         "techniques": used_techniques}
+
+        self.generate_pdf(md_template='module_report_template.md', temp_var=template_vars,
+                          md_file=self.mainMenu.installPath + '/plugins/report/markdown/Module_Report.md',
+                          pdf_out=self.mainMenu.installPath + '/plugins/report/Module_Report.pdf')
+
+    def run_report_query(self):
+        reporting_sub_query = (
+            Session()
+                .query(
+                models.Reporting,
+                self.substring(Session(), models.Reporting.name, "/").label(
+                    "agent_name"
+                ),
+            )
+                .filter(
+                and_(
+                    models.Reporting.name.ilike("agent%"),
+                    or_(
+                        models.Reporting.event_type == "task",
+                        models.Reporting.event_type == "checkin",
+                    ),
+                )
+            )
+                .subquery()
+        )
+
+        return (
+            Session()
+                .query(
+                reporting_sub_query.c.timestamp,
+                reporting_sub_query.c.event_type,
+                reporting_sub_query.c.agent_name,
+                reporting_sub_query.c.taskID,
+                models.Agent.hostname,
+                models.User.username,
+                models.Tasking.input.label("task"),
+                models.Tasking.output.label("results"),
+            )
+                .join(
+                models.Tasking,
+                and_(
+                    models.Tasking.id == reporting_sub_query.c.taskID,
+                    models.Tasking.agent_id == reporting_sub_query.c.agent_name,
+                ),
+                isouter=True,
+            )
+                .join(models.User, models.User.id == models.Tasking.user_id, isouter=True)
+                .join(
+                models.Agent,
+                models.Agent.session_id == reporting_sub_query.c.agent_name,
+                isouter=True,
+            )
+                .all()
+        )
+
+    def substring(self, session, column, delimeter):
+        """
+        https://stackoverflow.com/a/57763081
+        """
+        if session.bind.dialect.name == 'sqlite':
+            return func.substr(column, func.instr(column, delimeter) + 1)
+        elif session.bind.dialect.name == 'mysql':
+            return func.substring_index(column, delimeter, -1)
+
+    def shutdown(self):
+        """
+        Kills additional processes that were spawned
+        """
+        pass
+
+
+def xstr(s):
+    """Safely cast to a string with a handler for None"""
+    if s is None:
+        return ''
+    return str(s)

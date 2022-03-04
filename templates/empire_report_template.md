@@ -1,4 +1,4 @@
-![logo](./Reports/Templates/empire.png)
+![logo]({{ logo }})
 
 <center> <h1>Empire Report</h1> </center>
 
