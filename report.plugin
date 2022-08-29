@@ -1,40 +1,43 @@
 from __future__ import print_function
 
+import logging
 import threading
-from jinja2 import Environment, FileSystemLoader
-from tabulate import tabulate
-from md2pdf.core import md2pdf
-from sqlalchemy import or_, and_, func
 
-from empire.server.database import models
-from empire.server.database.base import Session
-from empire.server.plugins.report.mitre import Attack
+from jinja2 import Environment, FileSystemLoader
+from md2pdf.core import md2pdf
+from sqlalchemy import and_, func, or_
+from tabulate import tabulate
+
 import empire.server.common.helpers as helpers
 from empire.server.common.plugins import Plugin
+from empire.server.core.db import models
+from empire.server.core.db.base import SessionLocal as Session
+from empire.server.core.plugin_service import PluginService
+from empire.server.plugins.advanced_reporting.mitre import Attack
 
+log = logging.getLogger(__name__)
 
 class Plugin(Plugin):
-    description = "Generate enhanced reports and markdown files for customized PDF reports"
     lock = threading.Lock()
-
     def onLoad(self):
         """
         any custom loading behavior - called by init, so any
         behavior you'd normally put in __init__ goes here
         """
         self.info = {
-                        'Name': 'report',
-
-                        'Author': ['@Cx01N'],
-
+                        'Name': 'advanced-reporting',
+                        "Authors": [
+                            {
+                                "Name": "Anthony Rose",
+                                "Handle": "@Cx01N",
+                                "Link": "https://twitter.com/Cx01N_",
+                            }
+                        ],
                         'Description': 'Generate enhanced reports and markdown files for customized PDF reports',
-
                         'Software': '',
-
                         'Techniques': [''],
-
-                        'Comments': []
-                    },
+                        'Comments': [],
+                    }
 
         self.options = {
             'report': {
@@ -47,28 +50,14 @@ class Plugin(Plugin):
         }
 
     def execute(self, command):
-        # This is for parsing commands through the api
         try:
-            self.logo = self.mainMenu.installPath + '/plugins/report/templates/empire.png'
-            report_type = self.options['report']['Value']
-
-            if report_type == 'all':
-                self.pdf_report()
-            elif report_type == 'empire':
-                self.empire_report()
-            elif report_type == 'session':
-                self.session_report()
-            elif report_type == 'credential':
-                self.credential_report()
-            elif report_type == 'master':
-                self.master_log()
-            elif report_type == 'module':
-                self.module_report()
-
-            return True
+            self.thread = helpers.KThread(target=self.pdf_report)
+            self.thread.daemon = True
+            self.thread.start()
+            return
         except Exception as e:
-            print(e)
-            self.mainMenu.plugin_socketio_message(self.info["Name"], f"[!] {e}")
+            log.error(e)
+            self.plugin_service.plugin_socketio_message(self.info["Name"], f"[!] {e}")
             return False
 
     def get_commands(self):
@@ -79,7 +68,10 @@ class Plugin(Plugin):
         Any modifications to the mainMenu go here - e.g.
         registering functions to be run by user commands
         """
-        mainMenu.__class__.pdf_report = self.pdf_report
+        self.installPath = mainMenu.installPath
+        self.main_menu = mainMenu
+        self.plugin_service: PluginService = mainMenu.pluginsv2
+        self.logo = self.installPath + '/plugins/advanced_reporting/templates/empire.png'
 
     def pdf_report(self):
         """
@@ -90,14 +82,13 @@ class Plugin(Plugin):
         self.credential_report()
         self.master_log()
         self.module_report()
-
-        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[+] All report generated")
+        self.plugin_service.plugin_socketio_message(self.info['Name'], "[+] All report generated")
 
     def generate_pdf(self, md_template: str, temp_var: dict, md_file: str, pdf_out:str):
         """
         Generate pdf from markdown files using mustache templating
         """
-        env = Environment(loader=FileSystemLoader(self.mainMenu.installPath + "/plugins/report/templates/"))
+        env = Environment(loader=FileSystemLoader(self.installPath + "/plugins/advanced_reporting/templates/"))
         template = env.get_template(md_template)
 
         # Save markdown to file, if it requires editing
@@ -106,14 +97,14 @@ class Plugin(Plugin):
             f.write(md_out)
 
         # Generate PDF from MD file
-        md2pdf(pdf_out, md_content=md_out, css_file_path=self.mainMenu.installPath + '/plugins/report/templates/style.css',
+        md2pdf(pdf_out, md_content=md_out, css_file_path=self.installPath + '/plugins/advanced_reporting/templates/style.css',
                base_url='.')
 
     def empire_report(self):
-        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Empire Report")
+        self.plugin_service.plugin_socketio_message(self.info['Name'], "[*] Generating Empire Report")
 
         # Pull techniques and software used with Empire
-        software, techniques = Attack(self.mainMenu).attack_searcher()
+        software, techniques = Attack(self.main_menu).attack_searcher()
 
         # Set info from database
         description = software['description']
@@ -135,11 +126,11 @@ class Plugin(Plugin):
                          "techniques": used_techniques}
 
         self.generate_pdf(md_template='empire_report_template.md', temp_var=template_vars,
-                          md_file=self.mainMenu.installPath + '/plugins/report/markdown/Empire_Report.md',
-                          pdf_out=self.mainMenu.installPath + '/plugins/report/Empire_Report.pdf')
+                          md_file=self.installPath + '/plugins/advanced_reporting/markdown/Empire_Report.md',
+                          pdf_out=self.installPath + '/plugins/advanced_reporting/Empire_Report.pdf')
 
     def session_report(self):
-        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Session Report")
+        self.plugin_service.plugin_socketio_message(self.info['Name'], "[*] Generating Session Report")
 
         # Pull agent data from database
         agents = Session().query(models.Agent.session_id,
@@ -157,11 +148,11 @@ class Plugin(Plugin):
                          "sessions": tabulate(sessions, tablefmt='html')}
 
         self.generate_pdf(md_template='sessions_template.md', temp_var=template_vars,
-                          md_file=self.mainMenu.installPath + '/plugins/report/markdown/Sessions_Report.md',
-                          pdf_out=self.mainMenu.installPath + '/plugins/report/Sessions_Report.pdf')
+                          md_file=self.installPath + '/plugins/advanced_reporting/markdown/Sessions_Report.md',
+                          pdf_out=self.installPath + '/plugins/advanced_reporting/Sessions_Report.pdf')
 
     def credential_report(self):
-        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Credentials Report")
+        self.plugin_service.plugin_socketio_message(self.info['Name'], "[*] Generating Credentials Report")
 
         # Pull agent data from database
         data = Session().query(models.Credential.domain,
@@ -180,11 +171,11 @@ class Plugin(Plugin):
                          "creds": tabulate(creds, tablefmt='html')}
 
         self.generate_pdf(md_template='credentials_template.md', temp_var=template_vars,
-                          md_file=self.mainMenu.installPath + '/plugins/report/markdown/Credentials_Report.md',
-                          pdf_out=self.mainMenu.installPath + '/plugins/report/Credentials_Report.pdf')
+                          md_file=self.installPath + '/plugins/advanced_reporting/markdown/Credentials_Report.md',
+                          pdf_out=self.installPath + '/plugins/advanced_reporting/Credentials_Report.pdf')
 
     def master_log(self):
-        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Master Log Report")
+        self.plugin_service.plugin_socketio_message(self.info['Name'], "[*] Generating Master Log Report")
 
         data = self.run_report_query()
 
@@ -205,16 +196,16 @@ class Plugin(Plugin):
                          "log": log}
 
         self.generate_pdf(md_template='masterlog_template.md', temp_var=template_vars,
-                          md_file=self.mainMenu.installPath + '/plugins/report/markdown/Masterlog_Report.md',
-                          pdf_out=self.mainMenu.installPath + '/plugins/report/Masterlog_Report.pdf')
+                          md_file=self.installPath + '/plugins/advanced_reporting/markdown/Masterlog_Report.md',
+                          pdf_out=self.installPath + '/plugins/advanced_reporting/Masterlog_Report.pdf')
 
     def module_report(self):
         # TODO: Pull all software for module report
         #software, techniques = Attack(self.mainMenu).attack_searcher()
 
         # Pull all techniques from MITRE database
-        techniques = Attack(self.mainMenu).all_attacks()
-        self.mainMenu.plugin_socketio_message(self.info[0]['Name'], "[*] Generating Module Report")
+        techniques = Attack(self.main_menu).all_attacks()
+        self.plugin_service.plugin_socketio_message(self.info['Name'], "[*] Generating Module Report")
 
         # Pull agent data from database
         data = Session().query(models.Tasking.module_name.distinct()).filter(
@@ -224,8 +215,8 @@ class Plugin(Plugin):
         module_name = list([])
         for module_directory in data:
             try:
-                ttp.append(self.mainMenu.modules.modules[module_directory[0]].info['Techniques'])
-                module_name.append(self.mainMenu.modules.modules[module_directory[0]].info['Name'])
+                ttp.append(self.main_menu.modules.modules[module_directory[0]].info['Techniques'])
+                module_name.append(self.main_menu.modules.modules[module_directory[0]].info['Name'])
             except:
                 continue
 
@@ -248,8 +239,8 @@ class Plugin(Plugin):
                          "techniques": used_techniques}
 
         self.generate_pdf(md_template='module_report_template.md', temp_var=template_vars,
-                          md_file=self.mainMenu.installPath + '/plugins/report/markdown/Module_Report.md',
-                          pdf_out=self.mainMenu.installPath + '/plugins/report/Module_Report.pdf')
+                          md_file=self.installPath + '/plugins/advanced_reporting/markdown/Module_Report.md',
+                          pdf_out=self.installPath + '/plugins/advanced_reporting/Module_Report.pdf')
 
     def run_report_query(self):
         reporting_sub_query = (
