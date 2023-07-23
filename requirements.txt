@@ -1,0 +1,4 @@
+jinja2
+md2pdf.core
+sqlalchemy
+tabulate

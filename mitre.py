@@ -75,7 +75,6 @@ class Attack(object):
         return tech
 
     def get_techniques(self, group_name):
-
         group = self.get_group_by_alias(self.fs, group_name)[0]
         techniques = self.get_technique_by_group(self.fs, group)
         return techniques
