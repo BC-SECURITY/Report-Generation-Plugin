@@ -5,9 +5,16 @@
 th, td {
   padding: 5px;
   text-align: left;
+  word-wrap: break-word; /* add this line */
 }
 
 img[alt=logo] {
    width:100px;
    height:100px;
+}
+
+/* Add the following section to apply word-wrap for other elements like p (paragraph) and div. If your text is inside other elements, add those as well. */
+
+p, div {
+  word-wrap: break-word;
 }

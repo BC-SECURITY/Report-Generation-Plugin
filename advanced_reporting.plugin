@@ -12,7 +12,6 @@ from tabulate import tabulate
 
 from empire.server.common.plugins import Plugin
 from empire.server.core.db import models
-from empire.server.core.db.base import SessionLocal as Session
 from empire.server.core.db.models import PluginTaskStatus
 from empire.server.core.plugin_service import PluginService
 
@@ -209,7 +208,7 @@ class Plugin(Plugin):
             username = row.user.username if row.user else "None"
             out.write(
                 f"\n{xstr(row.created_at)} - {xstr(row.id)} ({xstr(row.agent_id)})> "
-                f"{xstr(username)}\n {xstr(row.input)}\n {xstr(row.output)}\n"
+                f"{xstr(username)}\n {xstr(row.input)[:100]}\n {xstr(row.output)[:1000]}\n"
             )
 
         output_str = out.getvalue()
@@ -233,8 +232,11 @@ class Plugin(Plugin):
         ttp = list([])
         module_name = list([])
         for task in data:
-            ttp.append(self.main_menu.modulesv2.modules[task.module_name].techniques)
-            module_name.append(self.main_menu.modulesv2.modules[task.module_name].name)
+            try:
+                module_name.append(self.main_menu.modulesv2.modules[task.module_name].name)
+                ttp.append(self.main_menu.modulesv2.modules[task.module_name].techniques)
+            except KeyError:
+                pass
 
         # Create list of techniques
         used_techniques = list([])

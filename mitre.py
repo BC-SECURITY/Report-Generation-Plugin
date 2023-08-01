@@ -6,10 +6,9 @@ import tarfile
 import urllib.request
 from itertools import chain
 
+import empire.server.common.helpers as helpers
 from stix2 import FileSystemSource, Filter
 from stix2.utils import get_type_from_id
-
-import empire.server.common.helpers as helpers
 
 
 class Attack(object):
