@@ -6,10 +6,9 @@ import tarfile
 import urllib.request
 from itertools import chain
 
+import empire.server.common.helpers as helpers
 from stix2 import FileSystemSource, Filter
 from stix2.utils import get_type_from_id
-
-import empire.server.common.helpers as helpers
 
 
 class Attack(object):
@@ -75,7 +74,6 @@ class Attack(object):
         return tech
 
     def get_techniques(self, group_name):
-
         group = self.get_group_by_alias(self.fs, group_name)[0]
         techniques = self.get_technique_by_group(self.fs, group)
         return techniques
