@@ -14,13 +14,13 @@ import empire.server.common.helpers as helpers
 
 class Attack(object):
     def __init__(self, main_menu):
-        self.mainMenu = main_menu
+        self.main_menu = main_menu
         self.fs = self.load_database()
 
     def get_commands(self):
         return self.commands
 
-    def register(self, mainMenu):
+    def register(self, main_menu):
         pass
 
     def shutdown(self):
@@ -83,9 +83,9 @@ class Attack(object):
     def load_database(self):
         try:
             # If database doesn't exist then download it
-            database_tar = self.mainMenu.installPath + "/data/cti.tar.gz"
+            database_tar = self.main_menu.installPath + "/data/cti.tar.gz"
             if not os.path.isfile(
-                self.mainMenu.installPath + "/data/cti/enterprise-attack"
+                self.main_menu.installPath + "/data/cti/enterprise-attack"
             ):
                 urllib.request.urlretrieve(
                     "https://github.com/mitre/cti/archive/refs/tags/ATT&CK-v8.2.tar.gz",
@@ -93,10 +93,10 @@ class Attack(object):
                 )
                 if database_tar.endswith("tar.gz"):
                     tar = tarfile.open(database_tar, "r:gz")
-                    tar.extractall(path=self.mainMenu.installPath + "/data")
+                    tar.extractall(path=self.main_menu.installPath + "/data")
                     tar.close()
             fs = FileSystemSource(
-                self.mainMenu.installPath + "/data/cti-ATT-CK-v8.2/enterprise-attack"
+                self.main_menu.installPath + "/data/cti-ATT-CK-v8.2/enterprise-attack"
             )
             return fs
         except Exception as e:
