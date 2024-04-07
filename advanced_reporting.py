@@ -19,7 +19,7 @@ from empire.server.core.plugin_service import PluginService
 class Plugin(BasePlugin):
     lock = threading.Lock()
 
-    def onLoad(self):
+    def on_load(self):
         """
         any custom loading behavior - called by init, so any
         behavior you'd normally put in __init__ goes here
