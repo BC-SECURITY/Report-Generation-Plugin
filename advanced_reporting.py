@@ -10,7 +10,7 @@ from md2pdf.core import md2pdf
 from sqlalchemy import and_, func, or_
 from tabulate import tabulate
 
-from empire.server.common.plugins import BasePlugin
+from empire.server.core.plugins import BasePlugin
 from empire.server.core.db import models
 from empire.server.core.db.models import PluginTaskStatus
 from empire.server.core.plugin_service import PluginService
