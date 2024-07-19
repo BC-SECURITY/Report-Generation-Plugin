@@ -4,26 +4,23 @@ import importlib.util
 import io
 import threading
 from pathlib import Path
+from typing import override
 
 from jinja2 import Environment, FileSystemLoader
 from md2pdf.core import md2pdf
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func
 from tabulate import tabulate
 
-from empire.server.core.plugins import BasePlugin
 from empire.server.core.db import models
 from empire.server.core.db.models import PluginTaskStatus
-from empire.server.core.plugin_service import PluginService
+from empire.server.core.plugins import BasePlugin
 
 
 class Plugin(BasePlugin):
     lock = threading.Lock()
 
-    def on_load(self):
-        """
-        any custom loading behavior - called by init, so any
-        behavior you'd normally put in __init__ goes here
-        """
+    @override
+    def on_load(self, db):
         self.options = {
             "report": {
                 "Description": "Report to generate by the server.",
@@ -56,12 +53,23 @@ class Plugin(BasePlugin):
             # },
         }
 
+        self.logo = (
+            self.install_path + "/plugins/Report-Generation-Plugin/templates/empire.png"
+        )
+
+        # Special load without changing folder name
+        file_path = f"{self.install_path}/plugins/Report-Generation-Plugin/mitre.py"
+        spec = importlib.util.spec_from_file_location("mitre", file_path)
+        mitre = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mitre)
+        self.Attack = mitre.Attack
+
     def execute(self, command, **kwargs):
         user = kwargs["user"]
         db = kwargs["db"]
         input = f'Generating reports for: {command["report"]}'
         plugin_task = models.PluginTask(
-            plugin_id=self.info["Name"],
+            plugin_id=self.info.name,
             input=input,
             input_full=input,
             user_id=user.id,
@@ -71,7 +79,7 @@ class Plugin(BasePlugin):
         db_downloads = []
 
         # if self.options["Logo"] == "":
-        #     self.logo = self.installPath + '/plugins/Report-Generation-Plugin/templates/empire.png'
+        #     self.logo = self.install_path + '/plugins/Report-Generation-Plugin/templates/empire.png'
         # else:
         #     print('test')
 
@@ -103,25 +111,6 @@ class Plugin(BasePlugin):
         db.add(plugin_task)
         db.flush()
 
-    def register(self, main_menu):
-        """
-        Any modifications to the main_menu go here - e.g.
-        registering functions to be run by user commands
-        """
-        self.installPath = main_menu.installPath
-        self.main_menu = main_menu
-        self.plugin_service: PluginService = main_menu.pluginsv2
-        self.logo = (
-            self.installPath + "/plugins/Report-Generation-Plugin/templates/empire.png"
-        )
-
-        # Special load without changing folder name
-        file_path = f"{self.installPath}/plugins/Report-Generation-Plugin/mitre.py"
-        spec = importlib.util.spec_from_file_location("mitre", file_path)
-        mitre = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mitre)
-        self.Attack = mitre.Attack
-
     def generate_report(
         self, md_template: str, temp_var: dict, md_file: str, pdf_out: str
     ):
@@ -130,7 +119,7 @@ class Plugin(BasePlugin):
         """
         env = Environment(
             loader=FileSystemLoader(
-                self.installPath + "/plugins/Report-Generation-Plugin/templates/"
+                self.install_path + "/plugins/Report-Generation-Plugin/templates/"
             )
         )
         template = env.get_template(md_template)
@@ -145,7 +134,7 @@ class Plugin(BasePlugin):
             md2pdf(
                 pdf_out,
                 md_content=md_out,
-                css_file_path=self.installPath
+                css_file_path=self.install_path
                 + "/plugins/Report-Generation-Plugin/templates/style.css",
                 base_url=".",
             )
@@ -290,7 +279,7 @@ class Plugin(BasePlugin):
         return self.generate_and_upload_report(db, user, template_vars, "Module_Report")
 
     def generate_and_upload_report(self, db, user, template_vars, report_name):
-        plugin_path = Path(self.installPath) / "plugins" / "Report-Generation-Plugin"
+        plugin_path = Path(self.install_path) / "plugins" / "Report-Generation-Plugin"
         pdf_out = plugin_path / f"{report_name}.pdf"
         md_out = plugin_path / "markdown" / f"{report_name}.md"
 
@@ -314,12 +303,6 @@ class Plugin(BasePlugin):
             return func.substr(column, func.instr(column, delimeter) + 1)
         elif session.bind.dialect.name == "mysql":
             return func.substring_index(column, delimeter, -1)
-
-    def shutdown(self):
-        """
-        Kills additional processes that were spawned
-        """
-        pass
 
 
 def xstr(s):
