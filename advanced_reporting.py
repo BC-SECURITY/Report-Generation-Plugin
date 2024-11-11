@@ -1,4 +1,3 @@
-from __future__ import print_function
 
 import importlib.util
 import io
@@ -8,7 +7,6 @@ from typing import override
 
 from jinja2 import Environment, FileSystemLoader
 from md2pdf.core import md2pdf
-from sqlalchemy import func
 from tabulate import tabulate
 
 from empire.server.core.db import models
@@ -21,7 +19,7 @@ class Plugin(BasePlugin):
 
     @override
     def on_load(self, db):
-        self.options = {
+        self.execution_options = {
             "report": {
                 "Description": "Report to generate by the server.",
                 "Required": True,
@@ -84,24 +82,25 @@ class Plugin(BasePlugin):
         #     print('test')
 
         report = command["report"]
+        fmt = command["format"]
         if report in ["session", "all"]:
-            db_download = self.session_report(db, user)
+            db_download = self.session_report(db, user, fmt)
             db_downloads.append(db_download)
             output += f"[*] Session report generated to {db_download.location}\n"
         if report in ["empire", "all"]:
-            db_download = self.empire_report(db, user)
+            db_download = self.empire_report(db, user, fmt)
             db_downloads.append(db_download)
             output += f"[*] Empire report generated to {db_download.location}\n"
         if report in ["credential", "all"]:
-            db_download = self.credential_report(db, user)
+            db_download = self.credential_report(db, user, fmt)
             db_downloads.append(db_download)
             output += f"[*] Credential report generated to {db_download.location}\n"
         if report in ["master", "all"]:
-            db_download = self.master_log(db, user)
+            db_download = self.master_log(db, user, fmt)
             db_downloads.append(db_download)
             output += f"[*] Master report generated to {db_download.location}\n"
         if report in ["module", "all"]:
-            db_download = self.module_report(db, user)
+            db_download = self.module_report(db, user, fmt)
             db_downloads.append(db_download)
             output += f"[*] Module report generated to {db_download.location}\n"
 
@@ -112,7 +111,7 @@ class Plugin(BasePlugin):
         db.flush()
 
     def generate_report(
-        self, md_template: str, temp_var: dict, md_file: str, pdf_out: str
+        self, md_template: str, temp_var: dict, md_file: str, pdf_out: str, fmt: str
     ):
         """
         Generate pdf or markdown files using mustache templating
@@ -129,7 +128,7 @@ class Plugin(BasePlugin):
         with open(md_file, "w") as f:
             f.write(md_out)
 
-        if self.options["format"]["Value"] == "pdf":
+        if fmt == "pdf":
             # Generate PDF from MD file
             md2pdf(
                 pdf_out,
@@ -139,12 +138,11 @@ class Plugin(BasePlugin):
                 base_url=".",
             )
             return pdf_out
-        elif self.options["format"]["Value"] == "md":
+        if fmt == "md":
             return md_file
-        else:
-            raise ValueError("Invalid format")
+        raise ValueError("Invalid format")
 
-    def empire_report(self, db, user):
+    def empire_report(self, db, user, fmt):
         # Pull techniques and software used with Empire
         software, techniques = self.Attack(self.main_menu).attack_searcher()
 
@@ -169,9 +167,9 @@ class Plugin(BasePlugin):
             "techniques": used_techniques,
         }
 
-        return self.generate_and_upload_report(db, user, template_vars, "Empire_Report")
+        return self.generate_and_upload_report(db, user, template_vars, "Empire_Report", fmt)
 
-    def session_report(self, db, user):
+    def session_report(self, db, user, fmt):
         sessions = [
             (
                 session.session_id,
@@ -189,10 +187,10 @@ class Plugin(BasePlugin):
         }
 
         return self.generate_and_upload_report(
-            db, user, template_vars, "Sessions_Report"
+            db, user, template_vars, "Sessions_Report", fmt
         )
 
-    def credential_report(self, db, user):
+    def credential_report(self, db, user, fmt):
         creds = [("Domain", "Username", "Host", "Cred Type", "Password")]
         for row in db.query(models.Credential).all():
             creds.extend(
@@ -203,10 +201,10 @@ class Plugin(BasePlugin):
         template_vars = {"logo": self.logo, "creds": tabulate(creds, tablefmt="html")}
 
         return self.generate_and_upload_report(
-            db, user, template_vars, "Credentials_Report"
+            db, user, template_vars, "Credentials_Report", fmt
         )
 
-    def master_log(self, db, user):
+    def master_log(self, db, user, fmt):
         out = io.StringIO()
         out.write("=" * 50 + "\n\n")
         for row in db.query(models.AgentTask).all():
@@ -223,10 +221,10 @@ class Plugin(BasePlugin):
         template_vars = {"logo": self.logo, "log": output_str}
 
         return self.generate_and_upload_report(
-            db, user, template_vars, "Masterlog_Report"
+            db, user, template_vars, "Masterlog_Report", fmt
         )
 
-    def module_report(self, db, user):
+    def module_report(self, db, user, fmt):
         # TODO: Pull all software for module report
         # software, techniques = self.Attack(self.main_menu).attack_searcher()
 
@@ -276,9 +274,9 @@ class Plugin(BasePlugin):
         # Add data to Jinja2 Template
         template_vars = {"logo": self.logo, "techniques": used_techniques}
 
-        return self.generate_and_upload_report(db, user, template_vars, "Module_Report")
+        return self.generate_and_upload_report(db, user, template_vars, "Module_Report", fmt)
 
-    def generate_and_upload_report(self, db, user, template_vars, report_name):
+    def generate_and_upload_report(self, db, user, template_vars, report_name, fmt):
         plugin_path = Path(self.install_path) / "plugins" / "Report-Generation-Plugin"
         pdf_out = plugin_path / f"{report_name}.pdf"
         md_out = plugin_path / "markdown" / f"{report_name}.md"
@@ -286,23 +284,15 @@ class Plugin(BasePlugin):
         self.generate_report(
             md_template=f"{report_name.lower()}_template.md",
             temp_var=template_vars,
-            md_file=md_out,
-            pdf_out=pdf_out,
+            md_file=str(md_out),
+            pdf_out=str(pdf_out),
+            fmt=fmt
         )
 
         test_upload = plugin_path / f"{report_name}.pdf"
         db_download = self.main_menu.downloadsv2.create_download(db, user, test_upload)
 
         return db_download
-
-    def substring(self, session, column, delimeter):
-        """
-        https://stackoverflow.com/a/57763081
-        """
-        if session.bind.dialect.name == "sqlite":
-            return func.substr(column, func.instr(column, delimeter) + 1)
-        elif session.bind.dialect.name == "mysql":
-            return func.substring_index(column, delimeter, -1)
 
 
 def xstr(s):

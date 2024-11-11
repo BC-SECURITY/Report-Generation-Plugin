@@ -1,4 +1,3 @@
-from __future__ import print_function
 
 import json
 import os
@@ -9,10 +8,10 @@ from itertools import chain
 from stix2 import FileSystemSource, Filter
 from stix2.utils import get_type_from_id
 
-import empire.server.common.helpers as helpers
+from empire.server.common import helpers
 
 
-class Attack(object):
+class Attack:
     def __init__(self, main_menu):
         self.main_menu = main_menu
         self.fs = self.load_database()
