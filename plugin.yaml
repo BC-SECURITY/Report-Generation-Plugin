@@ -1,10 +1,8 @@
-name: Advanced Reporting
+name: Report Generation Plugin
 authors:
   - name: Anthony Rose
     handle: '@Cx01N'
     link: https://twitter.com/Cx01N_
-description: Generate enhanced reports and markdown files for customized PDF reports
 software: 
 techniques: []
-comments: []
 main: advanced_reporting.py
