@@ -51,12 +51,9 @@ class Plugin(BasePlugin):
             # },
         }
 
-        self.logo = (
-            self.install_path + "/plugins/Report-Generation-Plugin/templates/empire.png"
-        )
-
-        # Special load without changing folder name
-        file_path = f"{self.install_path}/plugins/Report-Generation-Plugin/mitre.py"
+        self.plugin_dir = Path(__file__).parent
+        self.logo = str(self.plugin_dir / "templates" / "empire.png")
+        file_path = str(self.plugin_dir / "mitre.py")
         spec = importlib.util.spec_from_file_location("mitre", file_path)
         mitre = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mitre)
@@ -118,7 +115,7 @@ class Plugin(BasePlugin):
         """
         env = Environment(
             loader=FileSystemLoader(
-                self.install_path + "/plugins/Report-Generation-Plugin/templates/"
+                str(self.plugin_dir / "templates")
             )
         )
         template = env.get_template(md_template)
@@ -133,8 +130,7 @@ class Plugin(BasePlugin):
             md2pdf(
                 pdf_out,
                 md_content=md_out,
-                css_file_path=self.install_path
-                + "/plugins/Report-Generation-Plugin/templates/style.css",
+                css_file_path=str(self.plugin_dir / "templates" / "style.css"),
                 base_url=".",
             )
             return pdf_out
@@ -277,9 +273,8 @@ class Plugin(BasePlugin):
         return self.generate_and_upload_report(db, user, template_vars, "Module_Report", fmt)
 
     def generate_and_upload_report(self, db, user, template_vars, report_name, fmt):
-        plugin_path = Path(self.install_path) / "plugins" / "Report-Generation-Plugin"
-        pdf_out = plugin_path / f"{report_name}.pdf"
-        md_out = plugin_path / "markdown" / f"{report_name}.md"
+        pdf_out = self.plugin_dir / f"{report_name}.pdf"
+        md_out = self.plugin_dir / "markdown" / f"{report_name}.md"
 
         self.generate_report(
             md_template=f"{report_name.lower()}_template.md",
@@ -289,7 +284,7 @@ class Plugin(BasePlugin):
             fmt=fmt
         )
 
-        test_upload = plugin_path / f"{report_name}.pdf"
+        test_upload = self.plugin_dir / f"{report_name}.pdf"
         db_download = self.main_menu.downloadsv2.create_download(db, user, test_upload)
 
         return db_download
