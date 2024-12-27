@@ -6,3 +6,7 @@ authors:
 software: 
 techniques: []
 main: advanced_reporting.py
+python_deps:
+  - md2pdf
+  - stix2
+  - tabulate
