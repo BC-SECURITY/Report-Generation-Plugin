@@ -10,3 +10,4 @@ python_deps:
   - md2pdf
   - stix2
   - tabulate
+auto_start: true
