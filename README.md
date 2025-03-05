@@ -12,6 +12,7 @@ individual sections based on the modules used. Examples of the reports can be fo
 - Empire >=6.0
 - MD2PDF
 - Tabulate
+- stix2
 
 ## Install
 
@@ -19,5 +20,5 @@ Install via Starkiller's plugin marketplace.
 It also requires the following packages to be installed on the Empire server.
 
 ```bash
-poetry add md2pdf tabulate
+poetry add md2pdf tabulate stix2
 ```
