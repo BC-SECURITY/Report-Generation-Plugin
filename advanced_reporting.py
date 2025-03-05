@@ -1,5 +1,3 @@
-
-import importlib.util
 import io
 import threading
 from pathlib import Path
@@ -12,6 +10,8 @@ from tabulate import tabulate
 from empire.server.core.db import models
 from empire.server.core.db.models import PluginTaskStatus
 from empire.server.core.plugins import BasePlugin
+
+from .mitre import Attack
 
 
 class Plugin(BasePlugin):
@@ -53,16 +53,12 @@ class Plugin(BasePlugin):
 
         self.plugin_dir = Path(__file__).parent
         self.logo = str(self.plugin_dir / "templates" / "empire.png")
-        file_path = str(self.plugin_dir / "mitre.py")
-        spec = importlib.util.spec_from_file_location("mitre", file_path)
-        mitre = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mitre)
-        self.Attack = mitre.Attack
+        self.Attack = Attack
 
     def execute(self, command, **kwargs):
         user = kwargs["user"]
         db = kwargs["db"]
-        input = f'Generating reports for: {command["report"]}'
+        input = f"Generating reports for: {command['report']}"
         plugin_task = models.PluginTask(
             plugin_id=self.info.id,
             input=input,
@@ -113,11 +109,7 @@ class Plugin(BasePlugin):
         """
         Generate pdf or markdown files using mustache templating
         """
-        env = Environment(
-            loader=FileSystemLoader(
-                str(self.plugin_dir / "templates")
-            )
-        )
+        env = Environment(loader=FileSystemLoader(str(self.plugin_dir / "templates")))
         template = env.get_template(md_template)
 
         # Save markdown to file, if it requires editing
@@ -163,7 +155,9 @@ class Plugin(BasePlugin):
             "techniques": used_techniques,
         }
 
-        return self.generate_and_upload_report(db, user, template_vars, "Empire_Report", fmt)
+        return self.generate_and_upload_report(
+            db, user, template_vars, "Empire_Report", fmt
+        )
 
     def session_report(self, db, user, fmt):
         sessions = [
@@ -270,7 +264,9 @@ class Plugin(BasePlugin):
         # Add data to Jinja2 Template
         template_vars = {"logo": self.logo, "techniques": used_techniques}
 
-        return self.generate_and_upload_report(db, user, template_vars, "Module_Report", fmt)
+        return self.generate_and_upload_report(
+            db, user, template_vars, "Module_Report", fmt
+        )
 
     def generate_and_upload_report(self, db, user, template_vars, report_name, fmt):
         pdf_out = self.plugin_dir / f"{report_name}.pdf"
@@ -281,7 +277,7 @@ class Plugin(BasePlugin):
             temp_var=template_vars,
             md_file=str(md_out),
             pdf_out=str(pdf_out),
-            fmt=fmt
+            fmt=fmt,
         )
 
         test_upload = self.plugin_dir / f"{report_name}.pdf"

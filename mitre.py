@@ -1,4 +1,3 @@
-
 import json
 import os
 import tarfile
@@ -18,13 +17,6 @@ class Attack:
 
     def get_commands(self):
         return self.commands
-
-    def register(self, main_menu):
-        pass
-
-    def shutdown(self):
-        """If plugin spawns a subprocess or thread provide cleanup here otherwise leave as pass"""
-        pass
 
     def parse_json(self, mitre_json):
         mitre_json = json.loads(mitre_json)
@@ -270,5 +262,3 @@ class Attack:
 
         return revoked_by
 
-    def shutdown(self):
-        pass
