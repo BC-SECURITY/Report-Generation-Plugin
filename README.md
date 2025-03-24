@@ -9,21 +9,16 @@ individual sections based on the modules used. Examples of the reports can be fo
 <img width="776" alt="image" src="https://github.com/BC-SECURITY/Empire/assets/20302208/9f1d81a3-6bdc-4d65-a450-35ac3e19c264">
 
 ## Prerequisites
-- Empire 5.5+
+- Empire >=6.0
 - MD2PDF
 - Tabulate
+- stix2
 
 ## Install
-To run the plugin, install the following packages with Empire.
+
+Install via Starkiller's plugin marketplace.
+It also requires the following packages to be installed on the Empire server.
 
 ```bash
-sudo poetry add md2pdf tabulate
+poetry add md2pdf tabulate stix2
 ```
-
-Then run the following command to add the plugin to Empire.
-
-```bash
-cd empire/server/plugins/
-git clone https://github.com/BC-SECURITY/Report-Generation-Plugin
-```
-

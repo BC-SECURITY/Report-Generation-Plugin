@@ -1,0 +1,13 @@
+name: Report Generation Plugin
+authors:
+  - name: Anthony Rose
+    handle: '@Cx01N'
+    link: https://twitter.com/Cx01N_
+software: 
+techniques: []
+main: advanced_reporting.py
+python_deps:
+  - md2pdf
+  - stix2
+  - tabulate
+auto_start: true

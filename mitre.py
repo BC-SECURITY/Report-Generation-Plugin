@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import json
 import os
 import tarfile
@@ -9,23 +7,16 @@ from itertools import chain
 from stix2 import FileSystemSource, Filter
 from stix2.utils import get_type_from_id
 
-import empire.server.common.helpers as helpers
+from empire.server.common import helpers
 
 
-class Attack(object):
+class Attack:
     def __init__(self, main_menu):
-        self.mainMenu = main_menu
+        self.main_menu = main_menu
         self.fs = self.load_database()
 
     def get_commands(self):
         return self.commands
-
-    def register(self, mainMenu):
-        pass
-
-    def shutdown(self):
-        """If plugin spawns a subprocess or thread provide cleanup here otherwise leave as pass"""
-        pass
 
     def parse_json(self, mitre_json):
         mitre_json = json.loads(mitre_json)
@@ -83,9 +74,9 @@ class Attack(object):
     def load_database(self):
         try:
             # If database doesn't exist then download it
-            database_tar = self.mainMenu.installPath + "/data/cti.tar.gz"
+            database_tar = self.main_menu.installPath + "/data/cti.tar.gz"
             if not os.path.isfile(
-                self.mainMenu.installPath + "/data/cti/enterprise-attack"
+                self.main_menu.installPath + "/data/cti/enterprise-attack"
             ):
                 urllib.request.urlretrieve(
                     "https://github.com/mitre/cti/archive/refs/tags/ATT&CK-v8.2.tar.gz",
@@ -93,10 +84,10 @@ class Attack(object):
                 )
                 if database_tar.endswith("tar.gz"):
                     tar = tarfile.open(database_tar, "r:gz")
-                    tar.extractall(path=self.mainMenu.installPath + "/data")
+                    tar.extractall(path=self.main_menu.installPath + "/data")
                     tar.close()
             fs = FileSystemSource(
-                self.mainMenu.installPath + "/data/cti-ATT-CK-v8.2/enterprise-attack"
+                self.main_menu.installPath + "/data/cti-ATT-CK-v8.2/enterprise-attack"
             )
             return fs
         except Exception as e:
@@ -271,5 +262,3 @@ class Attack(object):
 
         return revoked_by
 
-    def shutdown(self):
-        pass
