@@ -121,9 +121,9 @@ class Plugin(BasePlugin):
             # Generate PDF from MD file
             md2pdf(
                 pdf_out,
-                md_content=md_out,
-                css_file_path=str(self.plugin_dir / "templates" / "style.css"),
-                base_url=".",
+                raw=md_out,
+                css=self.plugin_dir / "templates" / "style.css",
+                base_url=Path("."),
             )
             return pdf_out
         if fmt == "md":
