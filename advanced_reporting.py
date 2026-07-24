@@ -1,6 +1,5 @@
 import io
 import tempfile
-import threading
 from pathlib import Path
 from typing import override
 
@@ -16,8 +15,6 @@ from .mitre import Attack
 
 
 class Plugin(BasePlugin):
-    lock = threading.Lock()
-
     @override
     def on_load(self, db):
         self.execution_options = {
@@ -64,7 +61,8 @@ class Plugin(BasePlugin):
             plugin_id=self.info.id,
             input=input,
             input_full=input,
-            user_id=user.id,
+            # None on the auto_execute path, where there is no request user.
+            user_id=user.id if user else None,
             status=PluginTaskStatus.completed,
         )
         output = ""
@@ -184,7 +182,10 @@ class Plugin(BasePlugin):
     def credential_report(self, db, user, fmt):
         creds = [("Domain", "Username", "Host", "Cred Type", "Password")]
         for row in db.query(models.Credential).all():
-            creds.extend(
+            # append, not extend: extend flattened each credential into five
+            # separate entries, and tabulate then rendered every bare string as
+            # its own row, one character per cell.
+            creds.append(
                 [row.domain, row.username, row.host, row.credtype, row.password]
             )
 
@@ -222,45 +223,50 @@ class Plugin(BasePlugin):
         # Pull all techniques from MITRE database
         techniques = self.Attack(self.main_menu).all_attacks()
 
-        # Pull task data from database
-        data = db.query(models.AgentTask).all()
+        # Map each declared technique id to the modules that were tasked with
+        # it. Keyed by technique and deduplicated by module, because the old
+        # parallel-list approach walked one entry per *task* and resolved the
+        # module name with list.index -- so a module tasked 200 times emitted
+        # its technique block 200 times, and two modules sharing a technique
+        # list both resolved to whichever was tasked first.
+        modules_by_technique: dict[str, set[str]] = {}
+        tasked_module_ids = {
+            task.module_name for task in db.query(models.AgentTask).all()
+        }
+        for module_id in tasked_module_ids:
+            module = self.main_menu.modulesv2.modules.get(module_id)
+            if module is None:
+                continue
+            for technique_id in module.techniques:
+                modules_by_technique.setdefault(technique_id, set()).add(module.name)
 
-        ttp = list([])
-        module_name = list([])
-        for task in data:
+        used_techniques = []
+        for technique in techniques:
             try:
-                module_name.append(
-                    self.main_menu.modulesv2.modules[task.module_name].name
-                )
-                ttp.append(
-                    self.main_menu.modulesv2.modules[task.module_name].techniques
-                )
-            except KeyError:
-                pass
+                external_id = technique._inner["external_references"][0]._inner[
+                    "external_id"
+                ]
+            except (KeyError, IndexError):
+                continue
 
-        # Create list of techniques
-        used_techniques = list([])
-        for ttp_list in ttp:
-            for ttp_name in ttp_list:
-                for i in range(len(techniques)):
-                    if (
-                        ttp_name
-                        in techniques[i]
-                        ._inner["external_references"][0]
-                        ._inner["external_id"]
-                    ):
-                        try:
-                            used_techniques.append(
-                                "<h3>" + techniques[i]["name"] + "</h3>"
-                            )
-                            used_techniques.append(
-                                "**Empire Modules Used:** "
-                                + module_name[ttp.index(ttp_list)]
-                                + "<br><br>"
-                            )
-                            used_techniques.append(techniques[i]._inner["description"])
-                        except Exception:
-                            pass
+            # Substring rather than equality, preserving the original match: a
+            # module declaring T1059 also covers sub-techniques like T1059.001.
+            module_names = sorted(
+                {
+                    name
+                    for technique_id, names in modules_by_technique.items()
+                    if technique_id in external_id
+                    for name in names
+                }
+            )
+            if not module_names:
+                continue
+
+            used_techniques.append("<h3>" + technique["name"] + "</h3>")
+            used_techniques.append(
+                "**Empire Modules Used:** " + ", ".join(module_names) + "<br><br>"
+            )
+            used_techniques.append(technique._inner["description"])
 
         # Add data to Jinja2 Template
         template_vars = {"logo": self.logo, "techniques": used_techniques}

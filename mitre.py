@@ -1,4 +1,5 @@
 import json
+import shutil
 import tarfile
 import urllib.request
 from itertools import chain
@@ -75,12 +76,25 @@ class Attack:
         # If database doesn't exist then download it
         if not attack_dir.is_dir():
             database_tar = data_dir / "cti.tar.gz"
-            urllib.request.urlretrieve(
-                "https://github.com/mitre/cti/archive/refs/tags/ATT&CK-v8.2.tar.gz",
-                filename=database_tar,
-            )
-            with tarfile.open(database_tar, "r:gz") as tar:
-                tar.extractall(path=data_dir, filter="data")
+            try:
+                urllib.request.urlretrieve(
+                    "https://github.com/mitre/cti/archive/refs/tags/ATT&CK-v8.2.tar.gz",
+                    filename=database_tar,
+                )
+                # Extract to a staging dir and move into place, so an
+                # interrupted extraction (disk full, OOM, SIGKILL) can't leave a
+                # partial cti-ATT-CK-v8.2/ behind. The existence check above
+                # would then take the fast path forever and silently serve a
+                # truncated technique set with no way to re-download.
+                staging = data_dir / "cti-staging"
+                if staging.is_dir():
+                    shutil.rmtree(staging)
+                with tarfile.open(database_tar, "r:gz") as tar:
+                    tar.extractall(path=staging, filter="data")
+                (staging / attack_dir.parent.name).rename(attack_dir.parent)
+            finally:
+                database_tar.unlink(missing_ok=True)
+                shutil.rmtree(data_dir / "cti-staging", ignore_errors=True)
 
         return FileSystemSource(str(attack_dir))
 
@@ -252,4 +266,3 @@ class Attack:
             revoked_by = revoked_by[0]
 
         return revoked_by
-
