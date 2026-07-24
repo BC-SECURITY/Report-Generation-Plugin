@@ -1,4 +1,5 @@
 import io
+import tempfile
 import threading
 from pathlib import Path
 from typing import override
@@ -258,7 +259,7 @@ class Plugin(BasePlugin):
                                 + "<br><br>"
                             )
                             used_techniques.append(techniques[i]._inner["description"])
-                        except:
+                        except Exception:
                             pass
 
         # Add data to Jinja2 Template
@@ -269,21 +270,24 @@ class Plugin(BasePlugin):
         )
 
     def generate_and_upload_report(self, db, user, template_vars, report_name, fmt):
-        pdf_out = self.plugin_dir / f"{report_name}.pdf"
-        md_out = self.plugin_dir / "markdown" / f"{report_name}.md"
+        # Render into a temp directory. The plugin directory is a git checkout
+        # that gets updated and reinstalled in place, so it shouldn't accumulate
+        # generated reports.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_dir = Path(tmp_dir)
+            report = self.generate_report(
+                md_template=f"{report_name.lower()}_template.md",
+                temp_var=template_vars,
+                md_file=str(tmp_dir / f"{report_name}.md"),
+                pdf_out=str(tmp_dir / f"{report_name}.pdf"),
+                fmt=fmt,
+            )
 
-        self.generate_report(
-            md_template=f"{report_name.lower()}_template.md",
-            temp_var=template_vars,
-            md_file=str(md_out),
-            pdf_out=str(pdf_out),
-            fmt=fmt,
-        )
-
-        test_upload = self.plugin_dir / f"{report_name}.pdf"
-        db_download = self.main_menu.downloadsv2.create_download(db, user, test_upload)
-
-        return db_download
+            # Upload whichever file the requested format actually produced.
+            # This used to be a hardcoded .pdf, so `md` either raised
+            # FileNotFoundError or silently attached a stale PDF left behind by
+            # an earlier `pdf` run.
+            return self.main_menu.downloadsv2.create_download(db, user, Path(report))
 
 
 def xstr(s):
