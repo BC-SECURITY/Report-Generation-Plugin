@@ -263,8 +263,11 @@ class Plugin(BasePlugin):
                 continue
 
             used_techniques.append("<h3>" + technique["name"] + "</h3>")
+            # " / " not ", ": module_report_template.md renders the technique
+            # list with |replace(",", ""), which would strip a comma separator
+            # and run the module names together.
             used_techniques.append(
-                "**Empire Modules Used:** " + ", ".join(module_names) + "<br><br>"
+                "**Empire Modules Used:** " + " / ".join(module_names) + "<br><br>"
             )
             used_techniques.append(technique._inner["description"])
 
@@ -276,9 +279,10 @@ class Plugin(BasePlugin):
         )
 
     def generate_and_upload_report(self, db, user, template_vars, report_name, fmt):
-        # Render into a temp directory. The plugin directory is a git checkout
-        # that gets updated and reinstalled in place, so it shouldn't accumulate
-        # generated reports.
+        # Render into a temp directory: the plugin directory is source, not an
+        # output location. The old code wrote {report_name}.pdf into it on every
+        # run, which dirtied the install tree and left stale PDFs -- the exact
+        # files the fixed-.pdf upload below used to attach by mistake.
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_dir = Path(tmp_dir)
             report = self.generate_report(

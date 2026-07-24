@@ -72,9 +72,16 @@ class Attack:
     def load_database(self):
         data_dir = self.main_menu.install_path / "data"
         attack_dir = data_dir / "cti-ATT-CK-v8.2" / "enterprise-attack"
+        # Written only after a full extraction, and gated on instead of the
+        # directory's mere existence. FileSystemSource accepts a partially
+        # populated enterprise-attack/ without error -- a query for a type whose
+        # subdir is missing just returns [], i.e. a silently empty report -- so
+        # an is_dir() check would trust a truncated tree (e.g. one an
+        # interrupted 6.x run left behind, since 6.x re-extracted over data/
+        # every run) forever. The marker forces a clean re-extract instead.
+        complete_marker = attack_dir.parent / ".empire_complete"
 
-        # If database doesn't exist then download it
-        if not attack_dir.is_dir():
+        if not complete_marker.is_file():
             database_tar = data_dir / "cti.tar.gz"
             try:
                 urllib.request.urlretrieve(
@@ -83,15 +90,20 @@ class Attack:
                 )
                 # Extract to a staging dir and move into place, so an
                 # interrupted extraction (disk full, OOM, SIGKILL) can't leave a
-                # partial cti-ATT-CK-v8.2/ behind. The existence check above
-                # would then take the fast path forever and silently serve a
-                # truncated technique set with no way to re-download.
+                # half-written tree that the marker below would then bless.
                 staging = data_dir / "cti-staging"
                 if staging.is_dir():
                     shutil.rmtree(staging)
                 with tarfile.open(database_tar, "r:gz") as tar:
                     tar.extractall(path=staging, filter="data")
+                # Clear any leftover tree before the rename: renaming onto a
+                # non-empty directory raises ENOTEMPTY, which would wedge every
+                # later run. A partial cti-ATT-CK-v8.2/ from an interrupted 6.x
+                # extraction -- or one an operator half-deleted to force a
+                # refresh -- is exactly the state that reaches here.
+                shutil.rmtree(attack_dir.parent, ignore_errors=True)
                 (staging / attack_dir.parent.name).rename(attack_dir.parent)
+                complete_marker.touch()
             finally:
                 database_tar.unlink(missing_ok=True)
                 shutil.rmtree(data_dir / "cti-staging", ignore_errors=True)
