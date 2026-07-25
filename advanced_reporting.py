@@ -182,9 +182,6 @@ class Plugin(BasePlugin):
     def credential_report(self, db, user, fmt):
         creds = [("Domain", "Username", "Host", "Cred Type", "Password")]
         for row in db.query(models.Credential).all():
-            # append, not extend: extend flattened each credential into five
-            # separate entries, and tabulate then rendered every bare string as
-            # its own row, one character per cell.
             creds.append(
                 [row.domain, row.username, row.host, row.credtype, row.password]
             )
@@ -223,15 +220,12 @@ class Plugin(BasePlugin):
         # Pull all techniques from MITRE database
         techniques = self.Attack(self.main_menu).all_attacks()
 
-        # Map each declared technique id to the modules that were tasked with
-        # it. Keyed by technique and deduplicated by module, because the old
-        # parallel-list approach walked one entry per *task* and resolved the
-        # module name with list.index -- so a module tasked 200 times emitted
-        # its technique block 200 times, and two modules sharing a technique
-        # list both resolved to whichever was tasked first.
+        # Keyed by technique and deduplicated by module: a module tasked 200
+        # times declares its techniques once.
         modules_by_technique: dict[str, set[str]] = {}
         tasked_module_ids = {
-            task.module_name for task in db.query(models.AgentTask).all()
+            module_name
+            for (module_name,) in db.query(models.AgentTask.module_name).distinct()
         }
         for module_id in tasked_module_ids:
             module = self.main_menu.modulesv2.modules.get(module_id)
@@ -249,8 +243,8 @@ class Plugin(BasePlugin):
             except (KeyError, IndexError):
                 continue
 
-            # Substring rather than equality, preserving the original match: a
-            # module declaring T1059 also covers sub-techniques like T1059.001.
+            # Substring, not equality: a module declaring T1059 also covers
+            # sub-techniques like T1059.001.
             module_names = sorted(
                 {
                     name
@@ -263,13 +257,13 @@ class Plugin(BasePlugin):
                 continue
 
             used_techniques.append("<h3>" + technique["name"] + "</h3>")
-            # " / " not ", ": module_report_template.md renders the technique
-            # list with |replace(",", ""), which would strip a comma separator
-            # and run the module names together.
+            # " / " not ", ": the template renders this list through
+            # |replace(",", ""), which strips a comma separator.
             used_techniques.append(
                 "**Empire Modules Used:** " + " / ".join(module_names) + "<br><br>"
             )
-            used_techniques.append(technique._inner["description"])
+            # Revoked techniques carry no description (129 of 670 in v8.2).
+            used_techniques.append(technique._inner.get("description", ""))
 
         # Add data to Jinja2 Template
         template_vars = {"logo": self.logo, "techniques": used_techniques}
@@ -280,9 +274,7 @@ class Plugin(BasePlugin):
 
     def generate_and_upload_report(self, db, user, template_vars, report_name, fmt):
         # Render into a temp directory: the plugin directory is source, not an
-        # output location. The old code wrote {report_name}.pdf into it on every
-        # run, which dirtied the install tree and left stale PDFs -- the exact
-        # files the fixed-.pdf upload below used to attach by mistake.
+        # output location. create_download copies the file out before cleanup.
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_dir = Path(tmp_dir)
             report = self.generate_report(
@@ -293,10 +285,7 @@ class Plugin(BasePlugin):
                 fmt=fmt,
             )
 
-            # Upload whichever file the requested format actually produced.
-            # This used to be a hardcoded .pdf, so `md` either raised
-            # FileNotFoundError or silently attached a stale PDF left behind by
-            # an earlier `pdf` run.
+            # Whichever file the requested format produced, not a fixed .pdf.
             return self.main_menu.downloadsv2.create_download(db, user, Path(report))
 
 
