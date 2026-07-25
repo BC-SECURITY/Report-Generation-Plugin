@@ -1,13 +1,11 @@
 import json
-import os
+import shutil
 import tarfile
 import urllib.request
 from itertools import chain
 
 from stix2 import FileSystemSource, Filter
 from stix2.utils import get_type_from_id
-
-from empire.server.common import helpers
 
 
 class Attack:
@@ -72,26 +70,37 @@ class Attack:
 
     # mitre defined functions
     def load_database(self):
-        try:
-            # If database doesn't exist then download it
-            database_tar = self.main_menu.installPath + "/data/cti.tar.gz"
-            if not os.path.isfile(
-                self.main_menu.installPath + "/data/cti/enterprise-attack"
-            ):
+        data_dir = self.main_menu.install_path / "data"
+        attack_dir = data_dir / "cti-ATT-CK-v8.2" / "enterprise-attack"
+        # Gated on a marker rather than the directory existing: FileSystemSource
+        # serves a partially extracted tree without error, returning [] for any
+        # missing type, so a truncated tree would report empty forever.
+        complete_marker = attack_dir.parent / ".empire_complete"
+
+        if not complete_marker.is_file():
+            database_tar = data_dir / "cti.tar.gz"
+            try:
                 urllib.request.urlretrieve(
                     "https://github.com/mitre/cti/archive/refs/tags/ATT&CK-v8.2.tar.gz",
                     filename=database_tar,
                 )
-                if database_tar.endswith("tar.gz"):
-                    tar = tarfile.open(database_tar, "r:gz")
-                    tar.extractall(path=self.main_menu.installPath + "/data")
-                    tar.close()
-            fs = FileSystemSource(
-                self.main_menu.installPath + "/data/cti-ATT-CK-v8.2/enterprise-attack"
-            )
-            return fs
-        except Exception as e:
-            print(helpers.color(f"[!] Error: {e}"))
+                # Stage and move, so an interrupted extraction can't leave a
+                # half-written tree for the marker below to bless.
+                staging = data_dir / "cti-staging"
+                if staging.is_dir():
+                    shutil.rmtree(staging)
+                with tarfile.open(database_tar, "r:gz") as tar:
+                    tar.extractall(path=staging, filter="data")
+                # Renaming onto a non-empty directory raises ENOTEMPTY, and a
+                # leftover partial tree is exactly what reaches here.
+                shutil.rmtree(attack_dir.parent, ignore_errors=True)
+                (staging / attack_dir.parent.name).rename(attack_dir.parent)
+                complete_marker.touch()
+            finally:
+                database_tar.unlink(missing_ok=True)
+                shutil.rmtree(data_dir / "cti-staging", ignore_errors=True)
+
+        return FileSystemSource(str(attack_dir))
 
     def get_all_software(self, src):
         filts = [[Filter("type", "=", "malware")], [Filter("type", "=", "tool")]]
@@ -261,4 +270,3 @@ class Attack:
             revoked_by = revoked_by[0]
 
         return revoked_by
-

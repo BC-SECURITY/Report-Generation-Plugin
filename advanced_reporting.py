@@ -1,5 +1,5 @@
 import io
-import threading
+import tempfile
 from pathlib import Path
 from typing import override
 
@@ -15,8 +15,6 @@ from .mitre import Attack
 
 
 class Plugin(BasePlugin):
-    lock = threading.Lock()
-
     @override
     def on_load(self, db):
         self.execution_options = {
@@ -63,7 +61,8 @@ class Plugin(BasePlugin):
             plugin_id=self.info.id,
             input=input,
             input_full=input,
-            user_id=user.id,
+            # None on the auto_execute path, where there is no request user.
+            user_id=user.id if user else None,
             status=PluginTaskStatus.completed,
         )
         output = ""
@@ -183,7 +182,7 @@ class Plugin(BasePlugin):
     def credential_report(self, db, user, fmt):
         creds = [("Domain", "Username", "Host", "Cred Type", "Password")]
         for row in db.query(models.Credential).all():
-            creds.extend(
+            creds.append(
                 [row.domain, row.username, row.host, row.credtype, row.password]
             )
 
@@ -221,45 +220,50 @@ class Plugin(BasePlugin):
         # Pull all techniques from MITRE database
         techniques = self.Attack(self.main_menu).all_attacks()
 
-        # Pull task data from database
-        data = db.query(models.AgentTask).all()
+        # Keyed by technique and deduplicated by module: a module tasked 200
+        # times declares its techniques once.
+        modules_by_technique: dict[str, set[str]] = {}
+        tasked_module_ids = {
+            module_name
+            for (module_name,) in db.query(models.AgentTask.module_name).distinct()
+        }
+        for module_id in tasked_module_ids:
+            module = self.main_menu.modulesv2.modules.get(module_id)
+            if module is None:
+                continue
+            for technique_id in module.techniques:
+                modules_by_technique.setdefault(technique_id, set()).add(module.name)
 
-        ttp = list([])
-        module_name = list([])
-        for task in data:
+        used_techniques = []
+        for technique in techniques:
             try:
-                module_name.append(
-                    self.main_menu.modulesv2.modules[task.module_name].name
-                )
-                ttp.append(
-                    self.main_menu.modulesv2.modules[task.module_name].techniques
-                )
-            except KeyError:
-                pass
+                external_id = technique._inner["external_references"][0]._inner[
+                    "external_id"
+                ]
+            except (KeyError, IndexError):
+                continue
 
-        # Create list of techniques
-        used_techniques = list([])
-        for ttp_list in ttp:
-            for ttp_name in ttp_list:
-                for i in range(len(techniques)):
-                    if (
-                        ttp_name
-                        in techniques[i]
-                        ._inner["external_references"][0]
-                        ._inner["external_id"]
-                    ):
-                        try:
-                            used_techniques.append(
-                                "<h3>" + techniques[i]["name"] + "</h3>"
-                            )
-                            used_techniques.append(
-                                "**Empire Modules Used:** "
-                                + module_name[ttp.index(ttp_list)]
-                                + "<br><br>"
-                            )
-                            used_techniques.append(techniques[i]._inner["description"])
-                        except:
-                            pass
+            # Substring, not equality: a module declaring T1059 also covers
+            # sub-techniques like T1059.001.
+            module_names = sorted(
+                {
+                    name
+                    for technique_id, names in modules_by_technique.items()
+                    if technique_id in external_id
+                    for name in names
+                }
+            )
+            if not module_names:
+                continue
+
+            used_techniques.append("<h3>" + technique["name"] + "</h3>")
+            # " / " not ", ": the template renders this list through
+            # |replace(",", ""), which strips a comma separator.
+            used_techniques.append(
+                "**Empire Modules Used:** " + " / ".join(module_names) + "<br><br>"
+            )
+            # Revoked techniques carry no description (129 of 670 in v8.2).
+            used_techniques.append(technique._inner.get("description", ""))
 
         # Add data to Jinja2 Template
         template_vars = {"logo": self.logo, "techniques": used_techniques}
@@ -269,21 +273,20 @@ class Plugin(BasePlugin):
         )
 
     def generate_and_upload_report(self, db, user, template_vars, report_name, fmt):
-        pdf_out = self.plugin_dir / f"{report_name}.pdf"
-        md_out = self.plugin_dir / "markdown" / f"{report_name}.md"
+        # Render into a temp directory: the plugin directory is source, not an
+        # output location. create_download copies the file out before cleanup.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_dir = Path(tmp_dir)
+            report = self.generate_report(
+                md_template=f"{report_name.lower()}_template.md",
+                temp_var=template_vars,
+                md_file=str(tmp_dir / f"{report_name}.md"),
+                pdf_out=str(tmp_dir / f"{report_name}.pdf"),
+                fmt=fmt,
+            )
 
-        self.generate_report(
-            md_template=f"{report_name.lower()}_template.md",
-            temp_var=template_vars,
-            md_file=str(md_out),
-            pdf_out=str(pdf_out),
-            fmt=fmt,
-        )
-
-        test_upload = self.plugin_dir / f"{report_name}.pdf"
-        db_download = self.main_menu.downloadsv2.create_download(db, user, test_upload)
-
-        return db_download
+            # Whichever file the requested format produced, not a fixed .pdf.
+            return self.main_menu.downloadsv2.create_download(db, user, Path(report))
 
 
 def xstr(s):
